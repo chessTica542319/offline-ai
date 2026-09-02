@@ -6,7 +6,8 @@
         android:allowBackup="true"
         android:label="Offline AI"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OfflineAI">
+        android:theme="@style/Theme.OfflineAI"
+        android:name=".OfflineAIApplication">
 
         <activity
             android:name=".MainActivity"

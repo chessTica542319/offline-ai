@@ -1,5 +1,7 @@
 package com.offlineai.app.ui.navigation
 
+import android.net.Uri
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,20 +23,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+
+import com.offlineai.app.data.database.AppDatabase
+import com.offlineai.app.data.repository.StudyRepository
 import com.offlineai.app.ui.chat.ChatScreen
 import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.components.AppTopBar
-import kotlinx.coroutines.launch
-import android.net.Uri
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
+import com.offlineai.app.ui.subjects.SubjectSelectionScreen
+import com.offlineai.app.ui.subjects.SubjectsScreen
+
+import kotlinx.coroutines.launch
+
 
 enum class AppScreen {
     CHAT,
     IMPORT_FILES,
+    SUBJECT_SELECTION,
     SUBJECTS,
     SETTINGS,
     MORE
 }
+
 
 @Composable
 fun AppNavigation() {
@@ -43,19 +54,38 @@ fun AppNavigation() {
         mutableStateOf(AppScreen.CHAT)
     }
 
+    var selectedFiles by remember {
+        mutableStateOf<List<Uri>>(emptyList())
+    }
+
     val drawerState = rememberDrawerState(
         initialValue = DrawerValue.Closed
     )
 
     val scope = rememberCoroutineScope()
 
+    val context = LocalContext.current
+
+    val repository = remember {
+
+        StudyRepository(
+            AppDatabase
+                .getInstance(context)
+                .subjectDao()
+        )
+    }
+
+
     ModalNavigationDrawer(
+
         drawerState = drawerState,
 
         drawerContent = {
 
             AppDrawer(
+
                 currentScreen = currentScreen,
+
                 onScreenSelected = { screen ->
 
                     currentScreen = screen
@@ -66,6 +96,7 @@ fun AppNavigation() {
                 }
             )
         }
+
     ) {
 
         when (currentScreen) {
@@ -73,7 +104,9 @@ fun AppNavigation() {
             AppScreen.CHAT -> {
 
                 ChatScreen(
+
                     onOpenDrawer = {
+
                         scope.launch {
                             drawerState.open()
                         }
@@ -81,46 +114,83 @@ fun AppNavigation() {
 
                     onImportFiles = {
 
-                        currentScreen = AppScreen.IMPORT_FILES
+                        currentScreen =
+                            AppScreen.IMPORT_FILES
                     }
                 )
             }
 
+
             AppScreen.IMPORT_FILES -> {
 
-    ImportFilesScreen(
-        onOpenDrawer = {
-            scope.launch {
-                drawerState.open()
+                ImportFilesScreen(
+
+                    onOpenDrawer = {
+
+                        scope.launch {
+                            drawerState.open()
+                        }
+                    },
+
+                    onContinue = { files: List<Uri> ->
+
+                        selectedFiles = files
+
+                        currentScreen =
+                            AppScreen.SUBJECT_SELECTION
+                    }
+                )
             }
-        },
 
-        onContinue = { files: List<Uri> ->
 
-            // Subject selection will be implemented next.
-        }
-    )
-}
+            AppScreen.SUBJECT_SELECTION -> {
+
+                SubjectSelectionScreen(
+
+                    selectedFilesCount =
+                        selectedFiles.size,
+
+                    repository =
+                        repository,
+
+                    onOpenDrawer = {
+
+                        scope.launch {
+                            drawerState.open()
+                        }
+                    },
+
+                    onBack = {
+
+                        currentScreen =
+                            AppScreen.IMPORT_FILES
+                    }
+                )
+            }
+
 
             AppScreen.SUBJECTS -> {
 
-                PlaceholderScreen(
-                    title = "Subjects",
+                SubjectsScreen(
+
+                    repository = repository,
 
                     onOpenDrawer = {
+
                         scope.launch {
                             drawerState.open()
                         }
                     }
                 )
             }
+
 
             AppScreen.SETTINGS -> {
 
                 PlaceholderScreen(
                     title = "Settings",
-
                     onOpenDrawer = {
+
                         scope.launch {
                             drawerState.open()
                         }
@@ -128,12 +198,13 @@ fun AppNavigation() {
                 )
             }
 
+
             AppScreen.MORE -> {
 
                 PlaceholderScreen(
                     title = "More",
-
                     onOpenDrawer = {
+
                         scope.launch {
                             drawerState.open()
                         }
@@ -143,6 +214,7 @@ fun AppNavigation() {
         }
     }
 }
+
 
 @Composable
 private fun PlaceholderScreen(
@@ -163,6 +235,7 @@ private fun PlaceholderScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .fillMaxWidth(),
+
             contentAlignment = Alignment.Center
         ) {
 
@@ -175,7 +248,8 @@ private fun PlaceholderScreen(
 
                 color = Color(0xFF68736D),
 
-                style = MaterialTheme.typography.bodyLarge
+                style =
+                    MaterialTheme.typography.bodyLarge
             )
         }
     }
