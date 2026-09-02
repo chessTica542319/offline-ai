@@ -25,6 +25,8 @@ import com.offlineai.app.ui.chat.ChatScreen
 import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.components.AppTopBar
 import kotlinx.coroutines.launch
+import android.net.Uri
+import com.offlineai.app.ui.importfiles.ImportFilesScreen
 
 enum class AppScreen {
     CHAT,
@@ -86,16 +88,19 @@ fun AppNavigation() {
 
             AppScreen.IMPORT_FILES -> {
 
-                PlaceholderScreen(
-                    title = "Import Files",
-
-                    onOpenDrawer = {
-                        scope.launch {
-                            drawerState.open()
-                        }
-                    }
-                )
+    ImportFilesScreen(
+        onOpenDrawer = {
+            scope.launch {
+                drawerState.open()
             }
+        },
+
+        onContinue = { files: List<Uri> ->
+
+            // Subject selection will be implemented next.
+        }
+    )
+}
 
             AppScreen.SUBJECTS -> {
 
