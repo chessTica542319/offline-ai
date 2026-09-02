@@ -79,7 +79,7 @@ RudaDev / chessTica542319
 GitHub: https://github.com/chessTica542319
 Portfolio: https://ruda-dev.vercel.app
 Email: rudasam@isufst.edu.ph
-Location: Bacolod City, Philippines
+Location: Passi City, Philippines
 Built on: Android + Termux + Vim
 
 ## Copyright & License
