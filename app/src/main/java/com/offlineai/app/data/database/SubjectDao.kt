@@ -74,6 +74,12 @@ interface SubjectDao {
     @Query("""
         DELETE FROM subjects
         WHERE deletedAt IS NOT NULL
+    """)
+    suspend fun permanentlyDeleteAllDeleted()
+
+    @Query("""
+        DELETE FROM subjects
+        WHERE deletedAt IS NOT NULL
         AND deletedAt <= :cutoff
     """)
     suspend fun permanentlyDeleteExpired(cutoff: Long)

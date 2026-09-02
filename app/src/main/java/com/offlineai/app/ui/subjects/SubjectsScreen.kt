@@ -1,4 +1,3 @@
-
 package com.offlineai.app.ui.subjects
 
 import androidx.compose.foundation.background
@@ -26,8 +25,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,7 +67,7 @@ fun SubjectsScreen(
         mutableStateOf<List<SubjectEntity>>(emptyList())
     }
 
-    var showCreate by remember {
+    var showCreateForm by remember {
         mutableStateOf(false)
     }
 
@@ -80,8 +79,16 @@ fun SubjectsScreen(
         mutableStateOf<SubjectEntity?>(null)
     }
 
+    var restoreSubject by remember {
+        mutableStateOf<SubjectEntity?>(null)
+    }
+
     var permanentDeleteSubject by remember {
         mutableStateOf<SubjectEntity?>(null)
+    }
+
+    var showDeleteAllConfirmation by remember {
+        mutableStateOf(false)
     }
 
     var errorMessage by remember {
@@ -89,15 +96,23 @@ fun SubjectsScreen(
     }
 
     fun refresh() {
-
         scope.launch {
 
-            repository.cleanupExpiredDeletedSubjects()
+            try {
 
-            subjects = repository.getSubjects()
+                repository.cleanupExpiredDeletedSubjects()
 
-            deletedSubjects =
-                repository.getRecentlyDeletedSubjects()
+                subjects = repository.getSubjects()
+
+                deletedSubjects =
+                    repository.getRecentlyDeletedSubjects()
+
+            } catch (exception: Exception) {
+
+                errorMessage =
+                    exception.message
+                        ?: "Unable to load subjects."
+            }
         }
     }
 
@@ -116,30 +131,215 @@ fun SubjectsScreen(
             onOpenDrawer = onOpenDrawer
         )
 
-        if (subjects.isEmpty()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
 
-            FirstSubjectState(
-                onCreate = {
-                    errorMessage = null
-                    showCreate = true
+            verticalArrangement =
+                Arrangement.spacedBy(12.dp)
+        ) {
+
+            /*
+             * ---------------------------------------------------------
+             * CREATE SUBJECT FORM
+             * ---------------------------------------------------------
+             */
+
+            if (showCreateForm) {
+
+                item {
+
+                    CreateSubjectForm(
+                        errorMessage = errorMessage,
+
+                        onCancel = {
+                            showCreateForm = false
+                            errorMessage = null
+                        },
+
+                        onCreate = { name, description ->
+
+                            scope.launch {
+
+                                try {
+
+                                    repository.createSubject(
+                                        name = name,
+                                        description = description
+                                    )
+
+                                    showCreateForm = false
+                                    errorMessage = null
+
+                                    refresh()
+
+                                } catch (
+                                    exception:
+                                    IllegalArgumentException
+                                ) {
+
+                                    errorMessage =
+                                        exception.message
+                                            ?: "Unable to create subject."
+                                }
+                            }
+                        }
+                    )
                 }
-            )
 
-        } else {
+            } else {
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-
-                verticalArrangement =
-                    Arrangement.spacedBy(12.dp)
-            ) {
+                /*
+                 * -----------------------------------------------------
+                 * ACTIVE SUBJECT HEADER
+                 * -----------------------------------------------------
+                 */
 
                 item {
 
                     Spacer(
                         modifier = Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text =
+                            if (subjects.isEmpty())
+                                "Your Subjects"
+                            else
+                                "Your Subjects",
+
+                        style =
+                            MaterialTheme.typography.headlineSmall,
+
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+
+                    Text(
+                        text =
+                            "${subjects.size} active subject" +
+                                    if (subjects.size == 1)
+                                        ""
+                                    else
+                                        "s",
+
+                        color =
+                            MaterialTheme.colorScheme
+                                .onSurfaceVariant
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(12.dp)
+                    )
+
+                    Button(
+                        onClick = {
+
+                            errorMessage = null
+                            showCreateForm = true
+
+                        },
+
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    ) {
+
+                        Icon(
+                            imageVector =
+                                Icons.Default.Add,
+
+                            contentDescription = null
+                        )
+
+                        Spacer(
+                            modifier = Modifier.width(6.dp)
+                        )
+
+                        Text("New Subject")
+                    }
+                }
+            }
+
+            /*
+             * ---------------------------------------------------------
+             * EMPTY ACTIVE SUBJECT STATE
+             * ---------------------------------------------------------
+             */
+
+            if (subjects.isEmpty() && !showCreateForm) {
+
+                item {
+
+                    FirstSubjectState(
+                        onCreate = {
+
+                            errorMessage = null
+                            showCreateForm = true
+
+                        }
+                    )
+                }
+            }
+
+            /*
+             * ---------------------------------------------------------
+             * ACTIVE SUBJECTS
+             * ---------------------------------------------------------
+             */
+
+            items(
+                items = subjects,
+                key = { it.id }
+            ) { subject ->
+
+                ManagedSubjectCard(
+                    subject = subject,
+
+                    onRename = {
+
+                        errorMessage = null
+                        renameSubject = subject
+
+                    },
+
+                    onDelete = {
+
+                        errorMessage = null
+                        deleteSubject = subject
+
+                    }
+                )
+            }
+
+            /*
+             * ---------------------------------------------------------
+             * RECENTLY DELETED
+             * ---------------------------------------------------------
+             *
+             * IMPORTANT:
+             * This section is independent of `subjects.isEmpty()`.
+             *
+             * Therefore it remains visible even after the user deletes
+             * every active subject.
+             */
+
+            if (deletedSubjects.isNotEmpty()) {
+
+                item {
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    HorizontalDivider()
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
                     )
 
                     Row(
@@ -149,25 +349,30 @@ fun SubjectsScreen(
                     ) {
 
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 8.dp)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
 
                             Text(
-                                text = "Your Subjects",
+                                text = "Recently Deleted",
+
                                 style =
-                                    MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
+                                    MaterialTheme.typography
+                                        .titleLarge,
+
+                                fontWeight =
+                                    FontWeight.Bold
+                            )
+
+                            Spacer(
+                                modifier = Modifier.height(4.dp)
                             )
 
                             Text(
                                 text =
-                                    "${subjects.size} active subject" +
-                                            if (subjects.size == 1)
-                                                ""
-                                            else
-                                                "s",
+                                    "Deleted subjects are kept for 14 days.",
+
+                                style =
+                                    MaterialTheme.typography.bodyMedium,
 
                                 color =
                                     MaterialTheme.colorScheme
@@ -175,185 +380,96 @@ fun SubjectsScreen(
                             )
 
                             Spacer(
-                                modifier = Modifier.height(12.dp)
+                                modifier = Modifier.height(10.dp)
                             )
 
-                            Button(
+                            OutlinedButton(
                                 onClick = {
-                                    errorMessage = null
-                                    showCreate = true
-                                }
+                                    showDeleteAllConfirmation = true
+                                },
+
+                                modifier =
+                                    Modifier.fillMaxWidth()
                             ) {
 
                                 Icon(
                                     imageVector =
-                                        Icons.Default.Add,
-                                    contentDescription = null
+                                        Icons.Default.Delete,
+
+                                    contentDescription = null,
+
+                                    tint =
+                                        MaterialTheme.colorScheme.error
                                 )
 
                                 Spacer(
                                     modifier = Modifier.width(6.dp)
                                 )
 
-                                Text("New Subject")
+                                Text(
+                                    text = "Delete All Permanently",
+
+                                    color =
+                                        MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
                 }
 
                 items(
-                    items = subjects,
-                    key = { it.id }
+                    items = deletedSubjects,
+
+                    key = {
+                        "deleted-${it.id}"
+                    }
                 ) { subject ->
 
-                    ManagedSubjectCard(
+                    DeletedSubjectCard(
                         subject = subject,
 
-                        onRename = {
-                            errorMessage = null
-                            renameSubject = subject
+                        onRestore = {
+
+                            restoreSubject = subject
+
                         },
 
-                        onDelete = {
-                            errorMessage = null
-                            deleteSubject = subject
+                        onPermanentDelete = {
+
+                            permanentDeleteSubject = subject
+
                         }
                     )
                 }
+            }
 
-                if (deletedSubjects.isNotEmpty()) {
+            item {
 
-                    item {
-
-                        Spacer(
-                            modifier = Modifier.height(18.dp)
-                        )
-
-                        HorizontalDivider()
-
-                        Spacer(
-                            modifier = Modifier.height(18.dp)
-                        )
-
-                        Text(
-                            text = "Recently Deleted",
-                            style =
-                                MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(4.dp)
-                        )
-
-                        Text(
-                            text =
-                                "Deleted subjects are kept for 14 days.",
-                            style =
-                                MaterialTheme.typography.bodyMedium,
-                            color =
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(8.dp)
-                        )
-                    }
-
-                    items(
-                        items = deletedSubjects,
-                        key = { "deleted-${it.id}" }
-                    ) { subject ->
-
-                        DeletedSubjectCard(
-                            subject = subject,
-
-                            onRestore = {
-
-                                scope.launch {
-
-                                    try {
-
-                                        repository.restoreSubject(
-                                            subject
-                                        )
-
-                                        refresh()
-
-                                    } catch (exception:
-                                        IllegalArgumentException) {
-
-                                        errorMessage =
-                                            exception.message
-                                                ?: "Unable to restore subject."
-                                    }
-                                }
-                            },
-
-                            onPermanentDelete = {
-                                permanentDeleteSubject =
-                                    subject
-                            }
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(
-                        modifier = Modifier.height(24.dp)
-                    )
-                }
+                Spacer(
+                    modifier = Modifier.height(24.dp)
+                )
             }
         }
     }
 
-    if (showCreate) {
-
-        CreateSubjectDialog(
-            errorMessage = errorMessage,
-
-            onDismiss = {
-                showCreate = false
-                errorMessage = null
-            },
-
-            onCreate = { name, description ->
-
-                scope.launch {
-
-                    try {
-
-                        repository.createSubject(
-                            name,
-                            description
-                        )
-
-                        showCreate = false
-                        errorMessage = null
-                        refresh()
-
-                    } catch (exception:
-                        IllegalArgumentException) {
-
-                        errorMessage =
-                            exception.message
-                                ?: "Unable to create subject."
-                    }
-                }
-            }
-        )
-    }
+    /*
+     * -------------------------------------------------------------
+     * RENAME
+     * -------------------------------------------------------------
+     */
 
     renameSubject?.let { subject ->
 
         RenameSubjectDialog(
             subject = subject,
+
             errorMessage = errorMessage,
 
             onDismiss = {
+
                 renameSubject = null
                 errorMessage = null
+
             },
 
             onRename = { newName ->
@@ -369,10 +485,13 @@ fun SubjectsScreen(
 
                         renameSubject = null
                         errorMessage = null
+
                         refresh()
 
-                    } catch (exception:
-                        IllegalArgumentException) {
+                    } catch (
+                        exception:
+                        IllegalArgumentException
+                    ) {
 
                         errorMessage =
                             exception.message
@@ -383,28 +502,103 @@ fun SubjectsScreen(
         )
     }
 
+    /*
+     * -------------------------------------------------------------
+     * DELETE ACTIVE SUBJECT CONFIRMATION
+     * -------------------------------------------------------------
+     */
+
     deleteSubject?.let { subject ->
 
         DeleteSubjectDialog(
             subject = subject,
 
             onDismiss = {
+
                 deleteSubject = null
+
             },
 
             onConfirm = {
 
                 scope.launch {
 
-                    repository.deleteSubject(subject)
+                    try {
 
-                    deleteSubject = null
+                        repository.deleteSubject(
+                            subject
+                        )
 
-                    refresh()
+                        deleteSubject = null
+
+                        refresh()
+
+                    } catch (exception: Exception) {
+
+                        deleteSubject = null
+
+                        errorMessage =
+                            exception.message
+                                ?: "Unable to delete subject."
+                    }
                 }
             }
         )
     }
+
+    /*
+     * -------------------------------------------------------------
+     * RESTORE CONFIRMATION
+     * -------------------------------------------------------------
+     */
+
+    restoreSubject?.let { subject ->
+
+        RestoreSubjectDialog(
+            subject = subject,
+
+            onDismiss = {
+
+                restoreSubject = null
+
+            },
+
+            onConfirm = {
+
+                scope.launch {
+
+                    try {
+
+                        repository.restoreSubject(
+                            subject
+                        )
+
+                        restoreSubject = null
+                        errorMessage = null
+
+                        refresh()
+
+                    } catch (
+                        exception:
+                        IllegalArgumentException
+                    ) {
+
+                        restoreSubject = null
+
+                        errorMessage =
+                            exception.message
+                                ?: "Unable to restore subject."
+                    }
+                }
+            }
+        )
+    }
+
+    /*
+     * -------------------------------------------------------------
+     * PERMANENT DELETE ONE
+     * -------------------------------------------------------------
+     */
 
     permanentDeleteSubject?.let { subject ->
 
@@ -412,68 +606,292 @@ fun SubjectsScreen(
             subject = subject,
 
             onDismiss = {
+
                 permanentDeleteSubject = null
+
             },
 
             onConfirm = {
 
                 scope.launch {
 
-                    repository.permanentlyDeleteSubject(
-                        subject
-                    )
+                    try {
 
-                    permanentDeleteSubject = null
+                        repository.permanentlyDeleteSubject(
+                            subject
+                        )
 
-                    refresh()
+                        permanentDeleteSubject = null
+
+                        refresh()
+
+                    } catch (exception: Exception) {
+
+                        permanentDeleteSubject = null
+
+                        errorMessage =
+                            exception.message
+                                ?: "Unable to permanently delete subject."
+                    }
+                }
+            }
+        )
+    }
+
+    /*
+     * -------------------------------------------------------------
+     * DELETE ALL RECENTLY DELETED
+     * -------------------------------------------------------------
+     */
+
+    if (showDeleteAllConfirmation) {
+
+        DeleteAllSubjectsDialog(
+
+            count = deletedSubjects.size,
+
+            onDismiss = {
+
+                showDeleteAllConfirmation = false
+
+            },
+
+            onConfirm = {
+
+                scope.launch {
+
+                    try {
+
+                        repository.permanentlyDeleteAllDeletedSubjects()
+
+                        showDeleteAllConfirmation = false
+
+                        refresh()
+
+                    } catch (exception: Exception) {
+
+                        showDeleteAllConfirmation = false
+
+                        errorMessage =
+                            exception.message
+                                ?: "Unable to permanently delete subjects."
+                    }
                 }
             }
         )
     }
 }
 
+/*
+ * =================================================================
+ * CREATE SUBJECT FORM
+ * =================================================================
+ */
+
+@Composable
+private fun CreateSubjectForm(
+    errorMessage: String?,
+    onCancel: () -> Unit,
+    onCreate: (String, String) -> Unit
+) {
+
+    var name by remember {
+        mutableStateOf("")
+    }
+
+    var description by remember {
+        mutableStateOf("")
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    Color(0xFFF7F9F7)
+            )
+    ) {
+
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+
+            Text(
+                text = "Create New Subject",
+
+                style =
+                    MaterialTheme.typography
+                        .titleLarge,
+
+                fontWeight =
+                    FontWeight.Bold
+            )
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            OutlinedTextField(
+                value = name,
+
+                onValueChange = {
+                    name = it
+                },
+
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                label = {
+                    Text("Subject name")
+                },
+
+                singleLine = true
+            )
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            OutlinedTextField(
+                value = description,
+
+                onValueChange = {
+                    description = it
+                },
+
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                label = {
+                    Text("Description (optional)")
+                },
+
+                minLines = 3
+            )
+
+            if (errorMessage != null) {
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                Text(
+                    text = errorMessage,
+
+                    color =
+                        MaterialTheme.colorScheme.error,
+
+                    style =
+                        MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.End
+            ) {
+
+                TextButton(
+                    onClick = onCancel
+                ) {
+                    Text("Cancel")
+                }
+
+                Spacer(
+                    modifier = Modifier.width(8.dp)
+                )
+
+                Button(
+                    enabled =
+                        name.trim().isNotEmpty(),
+
+                    onClick = {
+
+                        onCreate(
+                            name.trim(),
+                            description.trim()
+                        )
+
+                    }
+                ) {
+
+                    Text("Create Subject")
+                }
+            }
+        }
+    }
+}
+
+/*
+ * =================================================================
+ * FIRST SUBJECT STATE
+ * =================================================================
+ */
+
 @Composable
 private fun FirstSubjectState(
     onCreate: () -> Unit
 ) {
 
-    Box(
+    Card(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
+            .fillMaxWidth()
+            .padding(top = 4.dp),
 
-        contentAlignment = Alignment.Center
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    Color(0xFFF7F9F7)
+            )
     ) {
 
         Column(
-            horizontalAlignment =
-                Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
 
-            verticalArrangement =
-                Arrangement.Center
+            horizontalAlignment =
+                Alignment.CenterHorizontally
         ) {
 
             Icon(
-                imageVector = Icons.Default.Book,
+                imageVector =
+                    Icons.Default.Book,
+
                 contentDescription = null,
 
                 modifier = Modifier
-                    .width(64.dp)
-                    .height(64.dp),
+                    .width(56.dp)
+                    .height(56.dp),
 
-                tint = MaterialTheme.colorScheme.primary
+                tint =
+                    MaterialTheme.colorScheme.primary
             )
 
             Spacer(
-                modifier = Modifier.height(20.dp)
+                modifier = Modifier.height(16.dp)
             )
 
             Text(
                 text = "Start your first subject",
+
                 style =
-                    MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+                    MaterialTheme.typography
+                        .titleLarge,
+
+                fontWeight =
+                    FontWeight.Bold,
+
+                textAlign =
+                    TextAlign.Center
             )
 
             Spacer(
@@ -485,25 +903,31 @@ private fun FirstSubjectState(
                     "Create a subject to organize your lessons, files, and study materials.",
 
                 style =
-                    MaterialTheme.typography.bodyLarge,
+                    MaterialTheme.typography.bodyMedium,
 
                 color =
-                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    MaterialTheme.colorScheme
+                        .onSurfaceVariant,
 
-                textAlign = TextAlign.Center
+                textAlign =
+                    TextAlign.Center
             )
 
             Spacer(
-                modifier = Modifier.height(24.dp)
+                modifier = Modifier.height(18.dp)
             )
 
             Button(
                 onClick = onCreate,
-                modifier = Modifier.fillMaxWidth()
+
+                modifier =
+                    Modifier.fillMaxWidth()
             ) {
 
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector =
+                        Icons.Default.Add,
+
                     contentDescription = null
                 )
 
@@ -517,6 +941,12 @@ private fun FirstSubjectState(
     }
 }
 
+/*
+ * =================================================================
+ * ACTIVE SUBJECT CARD
+ * =================================================================
+ */
+
 @Composable
 private fun ManagedSubjectCard(
     subject: SubjectEntity,
@@ -525,113 +955,136 @@ private fun ManagedSubjectCard(
 ) {
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier.fillMaxWidth(),
 
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF7F9F7)
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    Color(0xFFF7F9F7)
+            )
     ) {
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-
-            verticalAlignment =
-                Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
 
-            Icon(
-                imageVector = Icons.Default.Book,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(
-                modifier = Modifier.width(14.dp)
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 4.dp)
+            Row(
+                verticalAlignment =
+                    Alignment.Top
             ) {
 
-                Text(
-                    text = subject.name,
-                    style =
-                        MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                Icon(
+                    imageVector =
+                        Icons.Default.Book,
+
+                    contentDescription = null,
+
+                    tint =
+                        MaterialTheme.colorScheme.primary
                 )
-
-                if (subject.description.isNotBlank()) {
-
-                    Spacer(
-                        modifier = Modifier.height(3.dp)
-                    )
-
-                    Text(
-                        text = subject.description,
-                        style =
-                            MaterialTheme.typography.bodyMedium,
-
-                        color =
-                            MaterialTheme.colorScheme
-                                .onSurfaceVariant
-                    )
-                }
 
                 Spacer(
-                    modifier = Modifier.height(10.dp)
+                    modifier = Modifier.width(14.dp)
                 )
 
-                Row {
+                Column(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                ) {
 
-                    TextButton(
-                        onClick = onRename
-                    ) {
+                    Text(
+                        text = subject.name,
 
-                        Icon(
-                            imageVector =
-                                Icons.Default.Edit,
-                            contentDescription = null
-                        )
+                        style =
+                            MaterialTheme.typography
+                                .titleMedium,
 
-                        Spacer(
-                            modifier = Modifier.width(4.dp)
-                        )
+                        fontWeight =
+                            FontWeight.SemiBold
+                    )
 
-                        Text("Rename")
-                    }
-
-                    TextButton(
-                        onClick = onDelete
-                    ) {
-
-                        Icon(
-                            imageVector =
-                                Icons.Default.Delete,
-                            contentDescription = null,
-
-                            tint =
-                                MaterialTheme.colorScheme.error
-                        )
+                    if (subject.description.isNotBlank()) {
 
                         Spacer(
-                            modifier = Modifier.width(4.dp)
+                            modifier = Modifier.height(3.dp)
                         )
 
                         Text(
-                            text = "Delete",
+                            text =
+                                subject.description,
+
+                            style =
+                                MaterialTheme.typography
+                                    .bodyMedium,
+
                             color =
-                                MaterialTheme.colorScheme.error
+                                MaterialTheme.colorScheme
+                                    .onSurfaceVariant
                         )
                     }
+                }
+            }
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            Row {
+
+                TextButton(
+                    onClick = onRename
+                ) {
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.Edit,
+
+                        contentDescription = null
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(4.dp)
+                    )
+
+                    Text("Rename")
+                }
+
+                TextButton(
+                    onClick = onDelete
+                ) {
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.Delete,
+
+                        contentDescription = null,
+
+                        tint =
+                            MaterialTheme.colorScheme.error
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(4.dp)
+                    )
+
+                    Text(
+                        text = "Delete",
+
+                        color =
+                            MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
     }
 }
+
+/*
+ * =================================================================
+ * DELETED SUBJECT CARD
+ * =================================================================
+ */
 
 @Composable
 private fun DeletedSubjectCard(
@@ -644,11 +1097,14 @@ private fun DeletedSubjectCard(
         remainingDays(subject.deletedAt)
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier.fillMaxWidth(),
 
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFF8F8)
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    Color(0xFFFFF8F8)
+            )
     ) {
 
         Column(
@@ -657,9 +1113,13 @@ private fun DeletedSubjectCard(
 
             Text(
                 text = subject.name,
+
                 style =
-                    MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                    MaterialTheme.typography
+                        .titleMedium,
+
+                fontWeight =
+                    FontWeight.SemiBold
             )
 
             Spacer(
@@ -683,7 +1143,12 @@ private fun DeletedSubjectCard(
                     if (remaining <= 0)
                         "Scheduled for permanent deletion."
                     else
-                        "$remaining day${if (remaining == 1L) "" else "s"} remaining",
+                        "$remaining day${
+                            if (remaining == 1L)
+                                ""
+                            else
+                                "s"
+                        } remaining",
 
                 style =
                     MaterialTheme.typography.bodySmall,
@@ -705,6 +1170,7 @@ private fun DeletedSubjectCard(
                     Icon(
                         imageVector =
                             Icons.Default.Restore,
+
                         contentDescription = null
                     )
 
@@ -720,7 +1186,9 @@ private fun DeletedSubjectCard(
                 ) {
 
                     Text(
-                        text = "Delete Permanently",
+                        text =
+                            "Delete Permanently",
+
                         color =
                             MaterialTheme.colorScheme.error
                     )
@@ -730,143 +1198,11 @@ private fun DeletedSubjectCard(
     }
 }
 
-private fun remainingDays(
-    deletedAt: Long?
-): Long {
-
-    if (deletedAt == null) {
-        return 14
-    }
-
-    val expiry =
-        deletedAt +
-                StudyRepository.DELETION_RETENTION_MILLIS
-
-    val remaining =
-        expiry - System.currentTimeMillis()
-
-    if (remaining <= 0) {
-        return 0
-    }
-
-    return (remaining +
-            24L * 60L * 60L * 1000L - 1L) /
-            (24L * 60L * 60L * 1000L)
-}
-
-private fun formatDate(
-    timestamp: Long?
-): String {
-
-    if (timestamp == null) {
-        return "unknown date"
-    }
-
-    return SimpleDateFormat(
-        "MMM d, yyyy • h:mm a",
-        Locale.getDefault()
-    ).format(Date(timestamp))
-}
-
-@Composable
-private fun CreateSubjectDialog(
-    errorMessage: String?,
-    onDismiss: () -> Unit,
-    onCreate: (String, String) -> Unit
-) {
-
-    var name by remember {
-        mutableStateOf("")
-    }
-
-    var description by remember {
-        mutableStateOf("")
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-
-        title = {
-            Text("New Subject")
-        },
-
-        text = {
-
-            Column {
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                    },
-
-                    modifier = Modifier.fillMaxWidth(),
-
-                    label = {
-                        Text("Subject name")
-                    },
-
-                    singleLine = true
-                )
-
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = {
-                        description = it
-                    },
-
-                    modifier = Modifier.fillMaxWidth(),
-
-                    label = {
-                        Text("Description (optional)")
-                    }
-                )
-
-                if (errorMessage != null) {
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Text(
-                        text = errorMessage,
-                        color =
-                            MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-
-        confirmButton = {
-
-            TextButton(
-                enabled = name.trim().isNotEmpty(),
-
-                onClick = {
-                    onCreate(
-                        name.trim(),
-                        description.trim()
-                    )
-                }
-            ) {
-                Text("Create")
-            }
-        },
-
-        dismissButton = {
-
-            TextButton(
-                onClick = onDismiss
-            ) {
-                Text("Cancel")
-            }
-        }
-    )
-}
+/*
+ * =================================================================
+ * RENAME DIALOG
+ * =================================================================
+ */
 
 @Composable
 private fun RenameSubjectDialog(
@@ -893,11 +1229,13 @@ private fun RenameSubjectDialog(
 
                 OutlinedTextField(
                     value = name,
+
                     onValueChange = {
                         name = it
                     },
 
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier.fillMaxWidth(),
 
                     label = {
                         Text("Subject name")
@@ -914,6 +1252,7 @@ private fun RenameSubjectDialog(
 
                     Text(
                         text = errorMessage,
+
                         color =
                             MaterialTheme.colorScheme.error
                     )
@@ -924,12 +1263,14 @@ private fun RenameSubjectDialog(
         confirmButton = {
 
             TextButton(
-                enabled = name.trim().isNotEmpty(),
+                enabled =
+                    name.trim().isNotEmpty(),
 
                 onClick = {
                     onRename(name.trim())
                 }
             ) {
+
                 Text("Rename")
             }
         },
@@ -939,11 +1280,18 @@ private fun RenameSubjectDialog(
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Cancel")
             }
         }
     )
 }
+
+/*
+ * =================================================================
+ * DELETE SUBJECT CONFIRMATION
+ * =================================================================
+ */
 
 @Composable
 private fun DeleteSubjectDialog(
@@ -975,7 +1323,9 @@ private fun DeleteSubjectDialog(
             ) {
 
                 Text(
-                    text = "Move to Recently Deleted",
+                    text =
+                        "Move to Recently Deleted",
+
                     color =
                         MaterialTheme.colorScheme.error
                 )
@@ -987,11 +1337,68 @@ private fun DeleteSubjectDialog(
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Cancel")
             }
         }
     )
 }
+
+/*
+ * =================================================================
+ * RESTORE CONFIRMATION
+ * =================================================================
+ */
+
+@Composable
+private fun RestoreSubjectDialog(
+    subject: SubjectEntity,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+
+        title = {
+            Text("Restore Subject?")
+        },
+
+        text = {
+
+            Text(
+                "\"${subject.name}\" will be returned to your active subjects.\n\n" +
+                        "Its subject data will no longer be in Recently Deleted."
+            )
+        },
+
+        confirmButton = {
+
+            TextButton(
+                onClick = onConfirm
+            ) {
+
+                Text("Restore")
+            }
+        },
+
+        dismissButton = {
+
+            TextButton(
+                onClick = onDismiss
+            ) {
+
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+/*
+ * =================================================================
+ * PERMANENT DELETE ONE
+ * =================================================================
+ */
 
 @Composable
 private fun PermanentDeleteDialog(
@@ -1012,8 +1419,8 @@ private fun PermanentDeleteDialog(
             Text(
                 "This is permanent.\n\n" +
                         "\"${subject.name}\" and its subject record " +
-                        "will be permanently removed. This action cannot be undone.\n\n" +
-                        "Please confirm carefully."
+                        "will be permanently removed.\n\n" +
+                        "This action cannot be undone. Please confirm carefully."
             )
         },
 
@@ -1024,7 +1431,9 @@ private fun PermanentDeleteDialog(
             ) {
 
                 Text(
-                    text = "Permanently Delete",
+                    text =
+                        "Permanently Delete",
+
                     color =
                         MaterialTheme.colorScheme.error
                 )
@@ -1036,9 +1445,116 @@ private fun PermanentDeleteDialog(
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Keep Subject")
             }
         }
     )
 }
 
+/*
+ * =================================================================
+ * DELETE ALL CONFIRMATION
+ * =================================================================
+ */
+
+@Composable
+private fun DeleteAllSubjectsDialog(
+    count: Int,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+
+        title = {
+            Text("Delete All Permanently?")
+        },
+
+        text = {
+
+            Text(
+                "You are about to permanently delete " +
+                        "$count recently deleted subject" +
+                        if (count == 1) "." else "s." +
+                        "\n\nThis action cannot be undone."
+            )
+        },
+
+        confirmButton = {
+
+            TextButton(
+                onClick = onConfirm
+            ) {
+
+                Text(
+                    text =
+                        "Delete All Permanently",
+
+                    color =
+                        MaterialTheme.colorScheme.error
+                )
+            }
+        },
+
+        dismissButton = {
+
+            TextButton(
+                onClick = onDismiss
+            ) {
+
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+/*
+ * =================================================================
+ * HELPERS
+ * =================================================================
+ */
+
+private fun remainingDays(
+    deletedAt: Long?
+): Long {
+
+    if (deletedAt == null) {
+        return 14
+    }
+
+    val expiry =
+        deletedAt +
+                StudyRepository.DELETION_RETENTION_MILLIS
+
+    val remaining =
+        expiry - System.currentTimeMillis()
+
+    if (remaining <= 0) {
+        return 0
+    }
+
+    return (
+            remaining +
+                    24L * 60L * 60L * 1000L -
+                    1L
+            ) /
+            (24L * 60L * 60L * 1000L)
+}
+
+private fun formatDate(
+    timestamp: Long?
+): String {
+
+    if (timestamp == null) {
+        return "unknown date"
+    }
+
+    return SimpleDateFormat(
+        "MMM d, yyyy • h:mm a",
+        Locale.getDefault()
+    ).format(
+        Date(timestamp)
+    )
+}
