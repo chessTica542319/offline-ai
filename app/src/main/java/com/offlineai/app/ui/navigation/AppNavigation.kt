@@ -32,6 +32,7 @@ import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.components.AppTopBar
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
+import com.offlineai.app.ui.subjects.SubjectsScreen
 
 import com.offlineai.app.ui.camera.CameraScreen
 
@@ -152,8 +153,8 @@ fun AppNavigation() {
 }
 
             AppScreen.SUBJECTS -> {
-                PlaceholderScreen(
-                    title = "Subjects",
+                SubjectsScreen(
+                    repository = repository,
                     onOpenDrawer = {
                         scope.launch {
                             drawerState.open()

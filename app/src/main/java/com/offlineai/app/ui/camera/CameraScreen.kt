@@ -282,7 +282,9 @@ private fun PhotoReview(
 
             OutlinedButton(
                 onClick = onDiscard,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
@@ -294,7 +296,9 @@ private fun PhotoReview(
 
             OutlinedButton(
                 onClick = onRetake,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
