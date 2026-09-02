@@ -1,0 +1,54 @@
+# Gradle
+.gradle/
+**/build/
+
+# Local Android SDK configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# APK / generated artifacts
+*.apk
+*.aab
+
+# Native build output
+.cxx/
+.externalNativeBuild/
+
+# Kotlin
+.kotlin/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Local databases / application data
+*.db
+*.sqlite
+*.sqlite3
+
+# User imported study materials
+/imported/
+/documents/
+/knowledge/
+
+# Local AI models
+/models/
+*.gguf
+*.bin
+
+# Secrets
+*.keystore
+*.jks
+secrets.properties
