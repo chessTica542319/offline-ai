@@ -21,9 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
 
 import com.offlineai.app.data.database.AppDatabase
 import com.offlineai.app.data.repository.StudyRepository
@@ -32,20 +32,20 @@ import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.components.AppTopBar
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
-import com.offlineai.app.ui.subjects.SubjectsScreen
+
+import com.offlineai.app.ui.camera.CameraScreen
 
 import kotlinx.coroutines.launch
-
 
 enum class AppScreen {
     CHAT,
     IMPORT_FILES,
     SUBJECT_SELECTION,
+    CAMERA,
     SUBJECTS,
     SETTINGS,
     MORE
 }
-
 
 @Composable
 fun AppNavigation() {
@@ -67,27 +67,17 @@ fun AppNavigation() {
     val context = LocalContext.current
 
     val repository = remember {
-
         StudyRepository(
-            AppDatabase
-                .getInstance(context)
-                .subjectDao()
+            AppDatabase.getInstance(context).subjectDao()
         )
     }
 
-
     ModalNavigationDrawer(
-
         drawerState = drawerState,
-
         drawerContent = {
-
             AppDrawer(
-
                 currentScreen = currentScreen,
-
                 onScreenSelected = { screen ->
-
                     currentScreen = screen
 
                     scope.launch {
@@ -96,87 +86,75 @@ fun AppNavigation() {
                 }
             )
         }
-
     ) {
 
         when (currentScreen) {
 
             AppScreen.CHAT -> {
-
                 ChatScreen(
-
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
                     },
-
                     onImportFiles = {
-
-                        currentScreen =
-                            AppScreen.IMPORT_FILES
+                        currentScreen = AppScreen.IMPORT_FILES
                     }
                 )
             }
-
 
             AppScreen.IMPORT_FILES -> {
-
                 ImportFilesScreen(
-
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
                     },
-
+                    onTakePhoto = {
+                        currentScreen = AppScreen.CAMERA
+                    },
                     onContinue = { files: List<Uri> ->
-
                         selectedFiles = files
-
-                        currentScreen =
-                            AppScreen.SUBJECT_SELECTION
+                        currentScreen = AppScreen.SUBJECT_SELECTION
                     }
                 )
             }
-
 
             AppScreen.SUBJECT_SELECTION -> {
-
                 SubjectSelectionScreen(
-
-                    selectedFilesCount =
-                        selectedFiles.size,
-
-                    repository =
-                        repository,
-
+                    selectedFilesCount = selectedFiles.size,
+                    repository = repository,
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
                     },
-
                     onBack = {
-
-                        currentScreen =
-                            AppScreen.IMPORT_FILES
+                        currentScreen = AppScreen.IMPORT_FILES
                     }
                 )
             }
 
+            AppScreen.CAMERA -> {
+    CameraScreen(
+        onOpenDrawer = {
+            scope.launch {
+                drawerState.open()
+            }
+        },
+        onBack = {
+            currentScreen = AppScreen.IMPORT_FILES
+        },
+        onPhotoReady = { uri ->
+            currentScreen = AppScreen.IMPORT_FILES
+        }
+    )
+}
 
             AppScreen.SUBJECTS -> {
-
-                SubjectsScreen(
-
-                    repository = repository,
-
+                PlaceholderScreen(
+                    title = "Subjects",
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
@@ -184,13 +162,10 @@ fun AppNavigation() {
                 )
             }
 
-
             AppScreen.SETTINGS -> {
-
                 PlaceholderScreen(
                     title = "Settings",
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
@@ -198,13 +173,10 @@ fun AppNavigation() {
                 )
             }
 
-
             AppScreen.MORE -> {
-
                 PlaceholderScreen(
                     title = "More",
                     onOpenDrawer = {
-
                         scope.launch {
                             drawerState.open()
                         }
@@ -215,17 +187,14 @@ fun AppNavigation() {
     }
 }
 
-
 @Composable
 private fun PlaceholderScreen(
     title: String,
     onOpenDrawer: () -> Unit
 ) {
-
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-
         AppTopBar(
             title = title,
             onOpenDrawer = onOpenDrawer
@@ -235,21 +204,14 @@ private fun PlaceholderScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .fillMaxWidth(),
-
             contentAlignment = Alignment.Center
         ) {
-
             Text(
                 text = "$title\nComing soon",
-
                 modifier = Modifier.padding(24.dp),
-
                 textAlign = TextAlign.Center,
-
                 color = Color(0xFF68736D),
-
-                style =
-                    MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge
             )
         }
     }
