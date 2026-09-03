@@ -51,7 +51,8 @@ fun SubjectSelectionScreen(
     selectedFilesCount: Int,
     repository: StudyRepository,
     onOpenDrawer: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSubjectSelected: (SubjectEntity) -> Unit
 ) {
     val scope = rememberCoroutineScope()
 
@@ -146,7 +147,7 @@ fun SubjectSelectionScreen(
                     ) {
 
                         Text(
-                            text = "Your Subjects",
+                            text = "Choose a Subject",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -210,8 +211,7 @@ fun SubjectSelectionScreen(
                         SubjectCard(
                             subject = subject,
                             onClick = {
-                                // Subject selection/import destination
-                                // will be connected next.
+                                onSubjectSelected(subject)
                             }
                         )
                     }
@@ -236,15 +236,20 @@ fun SubjectSelectionScreen(
 
                     try {
 
-                        repository.createSubject(
+                        val subjectId = repository.createSubject(
                             name = name,
                             description = description
                         )
 
-                        subjects = repository.getSubjects()
+                        val subject = repository.getSubject(subjectId)
 
-                        showCreateDialog = false
-                        errorMessage = null
+                        if (subject != null) {
+                            showCreateDialog = false
+                            errorMessage = null
+                            onSubjectSelected(subject)
+                        } else {
+                            errorMessage = "Unable to load the new subject."
+                        }
 
                     } catch (exception: IllegalArgumentException) {
 

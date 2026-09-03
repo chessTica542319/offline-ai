@@ -27,14 +27,15 @@ import androidx.compose.ui.unit.dp
 
 import com.offlineai.app.data.database.AppDatabase
 import com.offlineai.app.data.repository.StudyRepository
+import com.offlineai.app.ui.camera.CameraScreen
+import com.offlineai.app.ui.camera.PhotoReviewScreen
 import com.offlineai.app.ui.chat.ChatScreen
 import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.components.AppTopBar
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
+import com.offlineai.app.ui.importfiles.ImportReviewScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
 import com.offlineai.app.ui.subjects.SubjectsScreen
-
-import com.offlineai.app.ui.camera.CameraScreen
 
 import kotlinx.coroutines.launch
 
@@ -42,7 +43,9 @@ enum class AppScreen {
     CHAT,
     IMPORT_FILES,
     SUBJECT_SELECTION,
+    IMPORT_REVIEW,
     CAMERA,
+    PHOTO_REVIEW,
     SUBJECTS,
     SETTINGS,
     MORE
@@ -57,6 +60,14 @@ fun AppNavigation() {
 
     var selectedFiles by remember {
         mutableStateOf<List<Uri>>(emptyList())
+    }
+
+    var selectedSubject by remember {
+        mutableStateOf<com.offlineai.app.data.database.SubjectEntity?>(null)
+    }
+
+    var capturedPhotoUri by remember {
+        mutableStateOf<Uri?>(null)
     }
 
     val drawerState = rememberDrawerState(
@@ -114,7 +125,7 @@ fun AppNavigation() {
                     onTakePhoto = {
                         currentScreen = AppScreen.CAMERA
                     },
-                    onContinue = { files: List<Uri> ->
+                    onContinue = { files ->
                         selectedFiles = files
                         currentScreen = AppScreen.SUBJECT_SELECTION
                     }
@@ -132,25 +143,76 @@ fun AppNavigation() {
                     },
                     onBack = {
                         currentScreen = AppScreen.IMPORT_FILES
+                    },
+                    onSubjectSelected = { subject ->
+                        selectedSubject = subject
+                        currentScreen = AppScreen.IMPORT_REVIEW
                     }
                 )
             }
 
-            AppScreen.CAMERA -> {
-    CameraScreen(
-        onOpenDrawer = {
-            scope.launch {
-                drawerState.open()
+            AppScreen.IMPORT_REVIEW -> {
+                val subject = selectedSubject
+
+                if (subject != null) {
+                    ImportReviewScreen(
+                        selectedFiles = selectedFiles,
+                        subject = subject,
+                        onOpenDrawer = {
+                            scope.launch {
+                                drawerState.open()
+                            }
+                        },
+                        onBack = {
+                            currentScreen = AppScreen.SUBJECT_SELECTION
+                        },
+                        onConfirm = {
+                        }
+                    )
+                } else {
+                    currentScreen = AppScreen.SUBJECT_SELECTION
+                }
             }
-        },
-        onBack = {
-            currentScreen = AppScreen.IMPORT_FILES
-        },
-        onPhotoReady = { uri ->
-            currentScreen = AppScreen.IMPORT_FILES
-        }
-    )
-}
+
+            AppScreen.CAMERA -> {
+                CameraScreen(
+                    onOpenDrawer = {
+                        scope.launch {
+                            drawerState.open()
+                        }
+                    },
+                    onBack = {
+                        currentScreen = AppScreen.IMPORT_FILES
+                    },
+                    onPhotoReady = { uri ->
+                        capturedPhotoUri = uri
+                        currentScreen = AppScreen.PHOTO_REVIEW
+                    }
+                )
+            }
+
+            AppScreen.PHOTO_REVIEW -> {
+                val photoUri = capturedPhotoUri
+
+                if (photoUri != null) {
+                    PhotoReviewScreen(
+                        photoUri = photoUri,
+                        onRetake = {
+                            capturedPhotoUri = null
+                            currentScreen = AppScreen.CAMERA
+                        },
+                        onDiscard = {
+                            capturedPhotoUri = null
+                            currentScreen = AppScreen.CAMERA
+                        },
+                        onContinue = {
+                            currentScreen = AppScreen.IMPORT_FILES
+                        }
+                    )
+                } else {
+                    currentScreen = AppScreen.CAMERA
+                }
+            }
 
             AppScreen.SUBJECTS -> {
                 SubjectsScreen(

@@ -3,15 +3,14 @@ package com.offlineai.app.ui.camera
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,8 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,8 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -54,7 +52,11 @@ fun CameraScreen(
 ) {
     val context = LocalContext.current
 
-    var photoUri by remember {
+    var capturedPhoto by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
+    var pendingUri by remember {
         mutableStateOf<Uri?>(null)
     }
 
@@ -75,10 +77,6 @@ fun CameraScreen(
         )
     }
 
-    var pendingUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
-
     val cameraLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.TakePicture()
@@ -88,7 +86,7 @@ fun CameraScreen(
             pendingUri = null
 
             if (success && uri != null) {
-                photoUri = uri
+                capturedPhoto = uri
             } else if (uri != null) {
                 deleteTemporaryPhoto(context, uri)
             }
@@ -131,7 +129,7 @@ fun CameraScreen(
             )
         }
 
-        if (photoUri == null) {
+        if (capturedPhoto == null) {
 
             Column(
                 modifier = Modifier
@@ -177,9 +175,11 @@ fun CameraScreen(
                         contentDescription = null
                     )
 
-                    Text(
-                        text = " Take Photo"
+                    Spacer(
+                        modifier = Modifier.size(8.dp)
                     )
+
+                    Text("Take Photo")
                 }
 
                 OutlinedButton(
@@ -188,25 +188,24 @@ fun CameraScreen(
                         .fillMaxWidth()
                         .padding(top = 12.dp)
                 ) {
-                    Text("Cancel")
+                    Text("Back")
                 }
             }
 
         } else {
 
-            PhotoReview(
-                uri = photoUri!!,
-                onRetake = {
-                    deleteTemporaryPhoto(context, photoUri!!)
-                    photoUri = null
-                    launchCamera()
+            PhotoCapturedActions(
+                photoUri = capturedPhoto!!,
+                onReview = {
+                    onPhotoReady(capturedPhoto!!)
                 },
                 onDiscard = {
-                    deleteTemporaryPhoto(context, photoUri!!)
-                    photoUri = null
-                },
-                onContinue = {
-                    onPhotoReady(photoUri!!)
+                    deleteTemporaryPhoto(
+                        context,
+                        capturedPhoto!!
+                    )
+
+                    capturedPhoto = null
                 }
             )
         }
@@ -214,38 +213,28 @@ fun CameraScreen(
 }
 
 @Composable
-private fun PhotoReview(
-    uri: Uri,
-    onRetake: () -> Unit,
-    onDiscard: () -> Unit,
-    onContinue: () -> Unit
+private fun PhotoCapturedActions(
+    photoUri: Uri,
+    onReview: () -> Unit,
+    onDiscard: () -> Unit
 ) {
     val context = LocalContext.current
 
-    val bitmap = remember(uri) {
+    val bitmap = remember(photoUri) {
         context.contentResolver
-            .openInputStream(uri)
-            ?.use { BitmapFactory.decodeStream(it) }
+            .openInputStream(photoUri)
+            ?.use {
+                BitmapFactory.decodeStream(it)
+            }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-
-        Text(
-            text = "Review Photo",
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFF101110)
-        )
-
-        Text(
-            text = "Check that the page is clear before continuing.",
-            modifier = Modifier.padding(top = 6.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF68736D)
-        )
 
         if (bitmap != null) {
 
@@ -253,74 +242,76 @@ private fun PhotoReview(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Captured study material",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(420.dp)
-                    .padding(vertical = 16.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Fit
+                    .size(
+                        width = 180.dp,
+                        height = 220.dp
+                    )
+                    .clip(
+                        RoundedCornerShape(16.dp)
+                    ),
+                contentScale = ContentScale.Crop
             )
 
         } else {
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Unable to display photo.",
-                    color = Color(0xFF68736D)
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.CameraAlt,
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+                tint = Color(0xFF2DB55D)
+            )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Text(
+            text = "Photo captured",
+            modifier = Modifier.padding(top = 20.dp),
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color(0xFF101110)
+        )
 
-            OutlinedButton(
-                onClick = onDiscard,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null
-                )
-
-                Text(" Discard")
-            }
-
-            OutlinedButton(
-                onClick = onRetake,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null
-                )
-
-                Text(" Retake")
-            }
-        }
+        Text(
+            text = "Your photo is ready. Review the content or discard it.",
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .fillMaxWidth(),
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color(0xFF68736D)
+        )
 
         Button(
-            onClick = onContinue,
+            onClick = onReview,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp)
+                .padding(top = 28.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Save,
+                imageVector = Icons.Default.Visibility,
                 contentDescription = null
             )
 
-            Text(" Continue")
+            Spacer(
+                modifier = Modifier.size(8.dp)
+            )
+
+            Text("Review Content")
+        }
+
+        OutlinedButton(
+            onClick = onDiscard,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null
+            )
+
+            Spacer(
+                modifier = Modifier.size(8.dp)
+            )
+
+            Text("Discard")
         }
     }
 }
