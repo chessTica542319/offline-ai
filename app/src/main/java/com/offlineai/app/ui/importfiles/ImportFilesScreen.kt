@@ -1,6 +1,7 @@
 package com.offlineai.app.ui.importfiles
 
 import android.net.Uri
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -29,10 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,20 +40,24 @@ import com.offlineai.app.ui.components.AppTopBar
 
 @Composable
 fun ImportFilesScreen(
+    selectedFiles: List<Uri>,
+    onFilesChanged: (List<Uri>) -> Unit,
     onOpenDrawer: () -> Unit,
     onContinue: (List<Uri>) -> Unit,
     onTakePhoto: () -> Unit
 ) {
-    var selectedFiles by remember {
-        mutableStateOf<List<Uri>>(emptyList())
-    }
-
     val filePicker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenMultipleDocuments()
         ) { uris ->
+
             if (uris.isNotEmpty()) {
-                selectedFiles = uris
+                val combinedFiles =
+                    (selectedFiles + uris).distinctBy {
+                        it.toString()
+                    }
+
+                onFilesChanged(combinedFiles)
             }
         }
 
@@ -220,7 +221,7 @@ fun ImportFilesScreen(
                         )
 
                         Text(
-                            text = "Capture a book page and review it before saving it to your study materials.",
+                            text = "Capture a book page and add it to the same study import.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -261,14 +262,19 @@ fun ImportFilesScreen(
 
                 items(
                     items = selectedFiles,
-                    key = { it.toString() }
+                    key = {
+                        it.toString()
+                    }
                 ) { uri ->
 
                     SelectedFileRow(
                         uri = uri,
                         onRemove = {
-                            selectedFiles =
-                                selectedFiles.filterNot { it == uri }
+                            onFilesChanged(
+                                selectedFiles.filterNot {
+                                    it == uri
+                                }
+                            )
                         }
                     )
                 }
@@ -331,8 +337,10 @@ private fun SelectedFileRow(
             )
 
             Text(
-                text = uri.lastPathSegment ?: "Selected file",
-                modifier = Modifier.weight(1f),
+                text = uri.lastPathSegment
+                    ?: "Selected file",
+                modifier = Modifier
+                    .weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFF101110)
             )

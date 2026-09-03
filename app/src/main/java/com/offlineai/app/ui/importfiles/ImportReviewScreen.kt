@@ -1,7 +1,5 @@
 package com.offlineai.app.ui.importfiles
 
-import android.net.Uri
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,10 +31,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.offlineai.app.data.database.SubjectEntity
+import com.offlineai.app.data.extraction.PendingStudyContent
 
 @Composable
 fun ImportReviewScreen(
-    selectedFiles: List<Uri>,
+    reviewedContents: List<PendingStudyContent>,
     subject: SubjectEntity,
     onOpenDrawer: () -> Unit,
     onBack: () -> Unit,
@@ -47,14 +46,15 @@ fun ImportReviewScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = 8.dp,
+                    vertical = 8.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
             IconButton(
                 onClick = onOpenDrawer
             ) {
@@ -83,10 +83,9 @@ fun ImportReviewScreen(
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-
             Spacer(
                 modifier = Modifier.height(12.dp)
             )
@@ -107,14 +106,12 @@ fun ImportReviewScreen(
                     containerColor = Color(0xFFF7F9F7)
                 )
             ) {
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
@@ -126,7 +123,6 @@ fun ImportReviewScreen(
                     )
 
                     Column {
-
                         Text(
                             text = subject.name,
                             style = MaterialTheme.typography.titleMedium,
@@ -134,7 +130,6 @@ fun ImportReviewScreen(
                         )
 
                         if (subject.description.isNotBlank()) {
-
                             Spacer(
                                 modifier = Modifier.height(3.dp)
                             )
@@ -150,13 +145,141 @@ fun ImportReviewScreen(
             }
 
             Spacer(
-                modifier = Modifier.height(24.dp)
+                modifier = Modifier.height(18.dp)
             )
 
             Text(
-                text = "Files to import",
+                text = "Content to save",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(
+                modifier = Modifier.height(4.dp)
+            )
+
+            Text(
+                text = "${reviewedContents.size} content" +
+                        if (reviewedContents.size == 1) "" else "s",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 20.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 12.dp,
+                bottom = 12.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(
+                items = reviewedContents,
+                key = {
+                    it.fileUri.toString()
+                }
+            ) { content ->
+                ReviewedContentCard(
+                    content = content
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(
+                    horizontal = 20.dp,
+                    vertical = 12.dp
+                )
+        ) {
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                enabled = reviewedContents.isNotEmpty()
+            ) {
+                Text("Confirm Import")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewedContentCard(
+    content: PendingStudyContent
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF7F9F7)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(
+                    modifier = Modifier.width(14.dp)
+                )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = content.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF101110)
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(5.dp)
+                    )
+
+                    Text(
+                        text = "Source: ${content.originalFileName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF68736D)
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+
+                    Text(
+                        text = "Type: ${content.sourceType}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF68736D)
+                    )
+                }
+            }
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            Text(
+                text = "Extracted text",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF101110)
             )
 
             Spacer(
@@ -164,72 +287,10 @@ fun ImportReviewScreen(
             )
 
             Text(
-                text = "${selectedFiles.size} file" +
-                        if (selectedFiles.size == 1) "" else "s",
+                text = content.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color(0xFF101110)
             )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-
-                items(
-                    items = selectedFiles
-                ) { uri ->
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFF7F9F7)
-                        )
-                    ) {
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            Icon(
-                                imageVector = Icons.Default.Description,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-
-                            Spacer(
-                                modifier = Modifier.width(12.dp)
-                            )
-
-                            Text(
-                                text = uri.lastPathSegment
-                                    ?: "Selected file",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(20.dp)
-            )
-
-            Button(
-                onClick = onConfirm,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                enabled = selectedFiles.isNotEmpty()
-            ) {
-                Text("Confirm Import")
-            }
         }
     }
 }

@@ -65,5 +65,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation(files("libs/poi-on-android.jar"))
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

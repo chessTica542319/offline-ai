@@ -1,10 +1,13 @@
 package com.offlineai.app.data.repository
 
+import com.offlineai.app.data.database.LessonDao
+import com.offlineai.app.data.database.LessonEntity
 import com.offlineai.app.data.database.SubjectDao
 import com.offlineai.app.data.database.SubjectEntity
 
 class StudyRepository(
-    private val subjectDao: SubjectDao
+    private val subjectDao: SubjectDao,
+    private val lessonDao: LessonDao
 ) {
 
     companion object {
@@ -32,7 +35,6 @@ class StudyRepository(
         name: String,
         description: String = ""
     ): Long {
-
         val cleanName = name.trim()
 
         require(cleanName.isNotEmpty()) {
@@ -55,7 +57,6 @@ class StudyRepository(
         subject: SubjectEntity,
         newName: String
     ) {
-
         val cleanName = newName.trim()
 
         require(cleanName.isNotEmpty()) {
@@ -66,7 +67,7 @@ class StudyRepository(
 
         require(
             existing == null ||
-            existing.id == subject.id
+                existing.id == subject.id
         ) {
             "A subject with this name already exists."
         }
@@ -81,7 +82,6 @@ class StudyRepository(
     suspend fun updateSubject(
         subject: SubjectEntity
     ) {
-
         val cleanName = subject.name.trim()
 
         require(cleanName.isNotEmpty()) {
@@ -99,7 +99,6 @@ class StudyRepository(
     suspend fun deleteSubject(
         subject: SubjectEntity
     ) {
-
         subjectDao.softDelete(
             id = subject.id,
             deletedAt = System.currentTimeMillis()
@@ -109,13 +108,11 @@ class StudyRepository(
     suspend fun restoreSubject(
         subject: SubjectEntity
     ) {
-
-        val existing =
-            subjectDao.getByName(subject.name)
+        val existing = subjectDao.getByName(subject.name)
 
         require(
             existing == null ||
-            existing.id == subject.id
+                existing.id == subject.id
         ) {
             "A subject with this name already exists."
         }
@@ -126,34 +123,64 @@ class StudyRepository(
     suspend fun permanentlyDeleteSubject(
         subject: SubjectEntity
     ) {
-
-        subjectDao.permanentlyDelete(
-            subject.id
-        )
+        subjectDao.permanentlyDelete(subject.id)
     }
 
-    /**
-     * Permanently deletes every subject currently
-     * inside Recently Deleted.
-     *
-     * This does NOT affect active subjects.
-     */
     suspend fun permanentlyDeleteAllDeletedSubjects() {
-
         subjectDao.permanentlyDeleteAllDeleted()
     }
 
     suspend fun cleanupExpiredDeletedSubjects() {
-
         val cutoff =
             System.currentTimeMillis() -
                 DELETION_RETENTION_MILLIS
 
-        subjectDao.permanentlyDeleteExpired(
-            cutoff
-        )
+        subjectDao.permanentlyDeleteExpired(cutoff)
     }
 
     suspend fun getSubjectCount(): Int =
         subjectDao.countActive()
+
+    suspend fun getLessons(
+        subjectId: Long
+    ): List<LessonEntity> =
+        lessonDao.getBySubject(subjectId)
+
+    suspend fun getLesson(
+        id: Long
+    ): LessonEntity? =
+        lessonDao.getById(id)
+
+    suspend fun createLesson(
+        subjectId: Long,
+        name: String,
+        description: String = ""
+    ): Long {
+        val cleanName = name.trim()
+
+        require(cleanName.isNotEmpty()) {
+            "Lesson name cannot be empty."
+        }
+
+        val existing = lessonDao
+            .getBySubject(subjectId)
+            .any {
+                it.name.equals(
+                    cleanName,
+                    ignoreCase = true
+                )
+            }
+
+        require(!existing) {
+            "A lesson with this name already exists in this subject."
+        }
+
+        return lessonDao.insert(
+            LessonEntity(
+                subjectId = subjectId,
+                name = cleanName,
+                description = description.trim()
+            )
+        )
+    }
 }

@@ -26,26 +26,36 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 import com.offlineai.app.data.database.AppDatabase
+import com.offlineai.app.data.database.SubjectEntity
 import com.offlineai.app.data.repository.StudyRepository
 import com.offlineai.app.ui.camera.CameraScreen
-import com.offlineai.app.ui.camera.PhotoReviewScreen
 import com.offlineai.app.ui.chat.ChatScreen
 import com.offlineai.app.ui.components.AppDrawer
-import com.offlineai.app.ui.components.AppTopBar
+import com.offlineai.app.ui.importfiles.ContentProcessingScreen
+import com.offlineai.app.ui.importfiles.ContentReviewScreen
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
 import com.offlineai.app.ui.importfiles.ImportReviewScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
 import com.offlineai.app.ui.subjects.SubjectsScreen
 
+import com.offlineai.app.data.extraction.PendingStudyContent
+
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+
 import kotlinx.coroutines.launch
+
+import com.offlineai.app.ui.importfiles.ContentProcessingScreen
+import com.offlineai.app.data.extraction.FileExtractionResult
 
 enum class AppScreen {
     CHAT,
     IMPORT_FILES,
+    CONTENT_PROCESSING,
+    CONTENT_REVIEW,
     SUBJECT_SELECTION,
     IMPORT_REVIEW,
     CAMERA,
-    PHOTO_REVIEW,
     SUBJECTS,
     SETTINGS,
     MORE
@@ -53,7 +63,6 @@ enum class AppScreen {
 
 @Composable
 fun AppNavigation() {
-
     var currentScreen by remember {
         mutableStateOf(AppScreen.CHAT)
     }
@@ -62,12 +71,32 @@ fun AppNavigation() {
         mutableStateOf<List<Uri>>(emptyList())
     }
 
-    var selectedSubject by remember {
-        mutableStateOf<com.offlineai.app.data.database.SubjectEntity?>(null)
+    var currentImportIndex by remember {
+        mutableStateOf(0)
     }
 
-    var capturedPhotoUri by remember {
-        mutableStateOf<Uri?>(null)
+    var selectedSubject by remember {
+        mutableStateOf<SubjectEntity?>(null)
+    }
+
+    var reviewedContents by remember {
+        mutableStateOf<List<PendingStudyContent>>(emptyList())
+    }
+
+    var currentExtractedText by remember {
+        mutableStateOf("")
+    }
+
+    var currentSourceType by remember {
+        mutableStateOf("")
+    }
+
+    var currentFileName by remember {
+        mutableStateOf("")
+    }
+
+    var extractionError by remember {
+        mutableStateOf<String?>(null)
     }
 
     val drawerState = rememberDrawerState(
@@ -78,11 +107,85 @@ fun AppNavigation() {
 
     val context = LocalContext.current
 
+    val database = remember {
+        AppDatabase.getInstance(context)
+    }
+
     val repository = remember {
         StudyRepository(
-            AppDatabase.getInstance(context).subjectDao()
+            database.subjectDao(),
+            database.lessonDao()
         )
     }
+
+    var showQuitDialog by remember {
+    mutableStateOf(false)
+}
+
+BackHandler {
+    showQuitDialog = true
+}
+
+    if (showQuitDialog) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = {
+            showQuitDialog = false
+        },
+        title = {
+            Text(
+                text = "Quit Offline AI?"
+            )
+        },
+        text = {
+            Text(
+                text = "Your current session will be closed. Unsaved import and review progress will be lost."
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    val activity =
+                        context as? Activity
+
+                    activity?.finishAndRemoveTask()
+                }
+            ) {
+                Text(
+                    text = "QUIT",
+                    color = Color(0xFFD32F2F)
+                )
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    showQuitDialog = false
+                }
+            ) {
+                Text("CANCEL")
+            }
+        }
+    )
+}
+
+    fun startImport(files: List<Uri>) {
+    if (files.isEmpty()) {
+        return
+    }
+
+    selectedFiles = files.distinctBy {
+        it.toString()
+    }
+
+    currentImportIndex = 0
+    reviewedContents = emptyList()
+    currentExtractedText = ""
+    currentSourceType = ""
+    currentFileName = ""
+    extractionError = null
+
+    currentScreen = AppScreen.CONTENT_PROCESSING
+}
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -99,7 +202,6 @@ fun AppNavigation() {
             )
         }
     ) {
-
         when (currentScreen) {
 
             AppScreen.CHAT -> {
@@ -116,25 +218,173 @@ fun AppNavigation() {
             }
 
             AppScreen.IMPORT_FILES -> {
-                ImportFilesScreen(
-                    onOpenDrawer = {
-                        scope.launch {
-                            drawerState.open()
-                        }
-                    },
-                    onTakePhoto = {
-                        currentScreen = AppScreen.CAMERA
-                    },
-                    onContinue = { files ->
-                        selectedFiles = files
-                        currentScreen = AppScreen.SUBJECT_SELECTION
-                    }
-                )
+    ImportFilesScreen(
+        selectedFiles = selectedFiles,
+        onFilesChanged = { files ->
+            selectedFiles = files
+        },
+        onOpenDrawer = {
+            scope.launch {
+                drawerState.open()
             }
+        },
+        onTakePhoto = {
+            currentScreen = AppScreen.CAMERA
+        },
+        onContinue = { files ->
+            startImport(files)
+        }
+    )
+}
+
+            AppScreen.CONTENT_PROCESSING -> {
+
+    val currentFile =
+        selectedFiles.getOrNull(
+            currentImportIndex
+        )
+
+    if (currentFile != null) {
+
+        ContentProcessingScreen(
+            fileUri = currentFile,
+            currentIndex =
+                currentImportIndex + 1,
+            totalFiles =
+                selectedFiles.size,
+
+            onSuccess = { result ->
+
+                currentExtractedText =
+                    result.text
+
+                currentSourceType =
+                    result.sourceType
+
+                currentFileName =
+                    result.fileName
+
+                currentScreen =
+                    AppScreen.CONTENT_REVIEW
+            },
+
+            onBack = {
+                if (currentImportIndex > 0) {
+                    currentImportIndex -= 1
+                    currentScreen =
+                        AppScreen.CONTENT_REVIEW
+                } else {
+                    currentScreen =
+                        AppScreen.IMPORT_FILES
+                }
+            }
+        )
+
+    } else {
+
+        currentScreen =
+            AppScreen.IMPORT_FILES
+    }
+}   
+
+            AppScreen.CONTENT_REVIEW -> {
+    val currentReviewedContent =
+        reviewedContents.getOrNull(
+            currentImportIndex
+        )
+
+    ContentReviewScreen(
+        fileName = currentFileName,
+        sourceType = currentSourceType,
+        extractedText = currentExtractedText,
+        currentIndex = currentImportIndex + 1,
+        totalFiles = selectedFiles.size,
+        initialTitle = currentReviewedContent?.title,
+        onBack = {
+
+            if (currentImportIndex > 0) {
+                val previousIndex =
+                    currentImportIndex - 1
+
+                val previousContent =
+                    reviewedContents[previousIndex]
+
+                currentImportIndex =
+                    previousIndex
+
+                currentExtractedText =
+                    previousContent.text
+
+                currentSourceType =
+                    previousContent.sourceType
+
+                currentFileName =
+                    previousContent.originalFileName
+
+                currentScreen =
+                    AppScreen.CONTENT_REVIEW
+            } else {
+                currentScreen =
+                    AppScreen.IMPORT_FILES
+            }
+        },
+        onContinue = { title, text ->
+
+            val content =
+                PendingStudyContent(
+                    fileUri =
+                        selectedFiles[currentImportIndex],
+                    title = title,
+                    text = text,
+                    sourceType = currentSourceType,
+                    originalFileName = currentFileName
+                )
+
+            reviewedContents =
+                if (
+                    currentImportIndex <
+                    reviewedContents.size
+                ) {
+                    reviewedContents.mapIndexed {
+                        index,
+                        existingContent ->
+
+                        if (
+                            index ==
+                            currentImportIndex
+                        ) {
+                            content
+                        } else {
+                            existingContent
+                        }
+                    }
+                } else {
+                    reviewedContents + content
+                }
+
+            if (
+                currentImportIndex + 1 <
+                selectedFiles.size
+            ) {
+                currentImportIndex += 1
+
+                currentExtractedText = ""
+                currentSourceType = ""
+                currentFileName = ""
+
+                currentScreen =
+                    AppScreen.CONTENT_PROCESSING
+            } else {
+                currentScreen =
+                    AppScreen.SUBJECT_SELECTION
+            }
+        }
+    )
+}
 
             AppScreen.SUBJECT_SELECTION -> {
                 SubjectSelectionScreen(
-                    selectedFilesCount = selectedFiles.size,
+                    selectedFilesCount = reviewedContents.size,
                     repository = repository,
                     onOpenDrawer = {
                         scope.launch {
@@ -142,7 +392,16 @@ fun AppNavigation() {
                         }
                     },
                     onBack = {
-                        currentScreen = AppScreen.IMPORT_FILES
+                        if (selectedFiles.isNotEmpty()) {
+                            currentImportIndex =
+                                selectedFiles.lastIndex
+
+                            currentScreen =
+                                AppScreen.CONTENT_REVIEW
+                        } else {
+                            currentScreen =
+                                AppScreen.IMPORT_FILES
+                        }
                     },
                     onSubjectSelected = { subject ->
                         selectedSubject = subject
@@ -152,27 +411,28 @@ fun AppNavigation() {
             }
 
             AppScreen.IMPORT_REVIEW -> {
-                val subject = selectedSubject
+    val subject = selectedSubject
 
-                if (subject != null) {
-                    ImportReviewScreen(
-                        selectedFiles = selectedFiles,
-                        subject = subject,
-                        onOpenDrawer = {
-                            scope.launch {
-                                drawerState.open()
-                            }
-                        },
-                        onBack = {
-                            currentScreen = AppScreen.SUBJECT_SELECTION
-                        },
-                        onConfirm = {
-                        }
-                    )
-                } else {
-                    currentScreen = AppScreen.SUBJECT_SELECTION
+    if (subject != null) {
+        ImportReviewScreen(
+            reviewedContents = reviewedContents,
+            subject = subject,
+            onOpenDrawer = {
+                scope.launch {
+                    drawerState.open()
                 }
+            },
+            onBack = {
+                currentScreen = AppScreen.SUBJECT_SELECTION
+            },
+            onConfirm = {
             }
+        )
+    } else {
+        currentScreen =
+            AppScreen.SUBJECT_SELECTION
+    }
+}
 
             AppScreen.CAMERA -> {
                 CameraScreen(
@@ -182,36 +442,21 @@ fun AppNavigation() {
                         }
                     },
                     onBack = {
-                        currentScreen = AppScreen.IMPORT_FILES
+                        currentScreen =
+                            AppScreen.IMPORT_FILES
                     },
                     onPhotoReady = { uri ->
-                        capturedPhotoUri = uri
-                        currentScreen = AppScreen.PHOTO_REVIEW
-                    }
+
+    val updatedFiles =
+        (selectedFiles + uri).distinctBy {
+            it.toString()
+        }
+
+    selectedFiles = updatedFiles
+
+    currentScreen = AppScreen.IMPORT_FILES
+}
                 )
-            }
-
-            AppScreen.PHOTO_REVIEW -> {
-                val photoUri = capturedPhotoUri
-
-                if (photoUri != null) {
-                    PhotoReviewScreen(
-                        photoUri = photoUri,
-                        onRetake = {
-                            capturedPhotoUri = null
-                            currentScreen = AppScreen.CAMERA
-                        },
-                        onDiscard = {
-                            capturedPhotoUri = null
-                            currentScreen = AppScreen.CAMERA
-                        },
-                        onContinue = {
-                            currentScreen = AppScreen.IMPORT_FILES
-                        }
-                    )
-                } else {
-                    currentScreen = AppScreen.CAMERA
-                }
             }
 
             AppScreen.SUBJECTS -> {
@@ -251,6 +496,38 @@ fun AppNavigation() {
 }
 
 @Composable
+private fun ExtractionErrorOverlay(
+    message: String,
+    onBack: () -> Unit,
+    onRetry: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = {
+        },
+        title = {
+            Text("Unable to read file")
+        },
+        text = {
+            Text(message)
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onRetry
+            ) {
+                Text("Try Again")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onBack
+            ) {
+                Text("Back")
+            }
+        }
+    )
+}
+
+@Composable
 private fun PlaceholderScreen(
     title: String,
     onOpenDrawer: () -> Unit
@@ -258,7 +535,7 @@ private fun PlaceholderScreen(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        AppTopBar(
+        com.offlineai.app.ui.components.AppTopBar(
             title = title,
             onOpenDrawer = onOpenDrawer
         )
