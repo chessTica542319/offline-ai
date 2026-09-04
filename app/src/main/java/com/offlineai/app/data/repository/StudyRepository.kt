@@ -2,12 +2,19 @@ package com.offlineai.app.data.repository
 
 import com.offlineai.app.data.database.LessonDao
 import com.offlineai.app.data.database.LessonEntity
+import com.offlineai.app.data.database.StudyContentDao
+import com.offlineai.app.data.database.StudyContentEntity
 import com.offlineai.app.data.database.SubjectDao
 import com.offlineai.app.data.database.SubjectEntity
+import com.offlineai.app.data.extraction.PendingStudyContent
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 class StudyRepository(
     private val subjectDao: SubjectDao,
-    private val lessonDao: LessonDao
+    private val lessonDao: LessonDao,
+    private val studyContentDao: StudyContentDao
 ) {
 
     companion object {
@@ -66,34 +73,20 @@ class StudyRepository(
         val existing = subjectDao.getByName(cleanName)
 
         require(
-            existing == null ||
-                existing.id == subject.id
+            existing == null || existing.id == subject.id
         ) {
             "A subject with this name already exists."
         }
 
         subjectDao.update(
-            subject.copy(
-                name = cleanName
-            )
+            subject.copy(name = cleanName)
         )
     }
 
     suspend fun updateSubject(
         subject: SubjectEntity
     ) {
-        val cleanName = subject.name.trim()
-
-        require(cleanName.isNotEmpty()) {
-            "Subject name cannot be empty."
-        }
-
-        subjectDao.update(
-            subject.copy(
-                name = cleanName,
-                description = subject.description.trim()
-            )
-        )
+        subjectDao.update(subject)
     }
 
     suspend fun deleteSubject(
@@ -108,15 +101,6 @@ class StudyRepository(
     suspend fun restoreSubject(
         subject: SubjectEntity
     ) {
-        val existing = subjectDao.getByName(subject.name)
-
-        require(
-            existing == null ||
-                existing.id == subject.id
-        ) {
-            "A subject with this name already exists."
-        }
-
         subjectDao.restore(subject.id)
     }
 
@@ -132,8 +116,7 @@ class StudyRepository(
 
     suspend fun cleanupExpiredDeletedSubjects() {
         val cutoff =
-            System.currentTimeMillis() -
-                DELETION_RETENTION_MILLIS
+            System.currentTimeMillis() - DELETION_RETENTION_MILLIS
 
         subjectDao.permanentlyDeleteExpired(cutoff)
     }
@@ -162,14 +145,14 @@ class StudyRepository(
             "Lesson name cannot be empty."
         }
 
-        val existing = lessonDao
-            .getBySubject(subjectId)
-            .any {
-                it.name.equals(
-                    cleanName,
-                    ignoreCase = true
-                )
-            }
+        val existing =
+            lessonDao.getBySubject(subjectId)
+                .any {
+                    it.name.equals(
+                        cleanName,
+                        ignoreCase = true
+                    )
+                }
 
         require(!existing) {
             "A lesson with this name already exists in this subject."
@@ -182,5 +165,114 @@ class StudyRepository(
                 description = description.trim()
             )
         )
+    }
+
+    suspend fun getOrCreateGeneralLesson(
+        subjectId: Long
+    ): LessonEntity {
+        val lessons = getLessons(subjectId)
+
+        val existing = lessons.firstOrNull {
+            it.name.equals("General", ignoreCase = true)
+        }
+
+        if (existing != null) {
+            return existing
+        }
+
+        val lessonId = createLesson(
+            subjectId = subjectId,
+            name = "General"
+        )
+
+        return getLesson(lessonId)
+            ?: error("Failed to create General lesson.")
+    }
+
+    suspend fun saveStudyContent(
+        lessonId: Long,
+        title: String,
+        text: String,
+        sourceType: String,
+        originalFileName: String,
+        fileSize: Long
+    ): Long {
+        val cleanTitle = title.trim()
+
+        require(cleanTitle.isNotEmpty()) {
+            "Content title cannot be empty."
+        }
+
+        return studyContentDao.insert(
+            StudyContentEntity(
+                lessonId = lessonId,
+                title = cleanTitle,
+                text = text,
+                sourceType = sourceType,
+                originalFileName = originalFileName,
+                fileSize = fileSize
+            )
+        )
+    }
+
+    suspend fun saveStudyContents(
+        lessonId: Long,
+        contents: List<PendingStudyContent>
+    ) {
+        contents.forEach { content ->
+            saveStudyContent(
+                lessonId = lessonId,
+                title = content.title,
+                text = content.text,
+                sourceType = content.sourceType,
+                originalFileName = content.originalFileName,
+                fileSize = content.fileSize
+            )
+        }
+    }
+
+    suspend fun getStudyContents(
+        lessonId: Long
+    ): List<StudyContentEntity> =
+        studyContentDao.getByLesson(lessonId)
+
+    suspend fun getStudyContentsForSubject(
+        subjectId: Long
+    ): List<StudyContentEntity> =
+        getLessons(subjectId)
+            .flatMap { lesson ->
+                getStudyContents(lesson.id)
+            }
+
+    suspend fun getStudyContent(
+        id: Long
+    ): StudyContentEntity? =
+        studyContentDao.getById(id)
+
+    suspend fun updateStudyContent(
+        content: StudyContentEntity
+    ) {
+        studyContentDao.update(content)
+    }
+
+    suspend fun deleteStudyContent(
+        id: Long
+    ) {
+        studyContentDao.delete(id)
+    }
+
+    suspend fun getStudyContentCount(): Int =
+        studyContentDao.count()
+
+    fun observeKnowledgeStats(): Flow<KnowledgeStats> {
+        return combine(
+            studyContentDao.observeActiveCount(),
+            subjectDao.observeActiveCount()
+        ) { files, subjects ->
+            KnowledgeStats(
+                files = files,
+                subjects = subjects
+            )   
+        }
     }
 }

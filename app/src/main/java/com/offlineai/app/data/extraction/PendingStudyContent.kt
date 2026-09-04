@@ -7,5 +7,6 @@ data class PendingStudyContent(
     val title: String,
     val text: String,
     val sourceType: String,
-    val originalFileName: String
+    val originalFileName: String,
+    val fileSize: Long
 )

@@ -30,151 +30,104 @@ import com.offlineai.app.ui.navigation.AppScreen
 @Composable
 fun AppDrawer(
     currentScreen: AppScreen,
-    onScreenSelected: (AppScreen) -> Unit
-) {
-
+        knowledgeStats: com.offlineai.app.data.repository.KnowledgeStats,
+        onScreenSelected: (AppScreen) -> Unit
+    ){
     ModalDrawerSheet(
         drawerContainerColor = Color.White,
         drawerContentColor = Color(0xFF101110),
         modifier = Modifier.width(320.dp)
     ) {
-
         Column(
             modifier = Modifier
                 .padding(vertical = 20.dp)
         ) {
-
             DrawerHeader()
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(modifier = Modifier.height(12.dp))
 
             NavigationDrawerItem(
-                label = {
-                    Text("Chat")
-                },
-
+                label = { Text("Chat") },
                 selected = currentScreen == AppScreen.CHAT,
-
-                onClick = {
-                    onScreenSelected(AppScreen.CHAT)
-                },
-
+                onClick = { onScreenSelected(AppScreen.CHAT) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Chat,
                         contentDescription = "Chat"
                     )
                 },
-
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
             NavigationDrawerItem(
-                label = {
-                    Text("Import Files")
-                },
-
+                label = { Text("Import Files") },
                 selected = currentScreen == AppScreen.IMPORT_FILES,
-
-                onClick = {
-                    onScreenSelected(AppScreen.IMPORT_FILES)
-                },
-
+                onClick = { onScreenSelected(AppScreen.IMPORT_FILES) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Description,
                         contentDescription = "Import Files"
                     )
                 },
-
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
             NavigationDrawerItem(
-                label = {
-                    Text("Subjects")
-                },
-
+                label = { Text("Subjects") },
                 selected = currentScreen == AppScreen.SUBJECTS,
-
-                onClick = {
-                    onScreenSelected(AppScreen.SUBJECTS)
-                },
-
+                onClick = { onScreenSelected(AppScreen.SUBJECTS) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Book,
                         contentDescription = "Subjects"
                     )
                 },
-
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
             NavigationDrawerItem(
-                label = {
-                    Text("Settings")
-                },
-
+                label = { Text("Settings") },
                 selected = currentScreen == AppScreen.SETTINGS,
-
-                onClick = {
-                    onScreenSelected(AppScreen.SETTINGS)
-                },
-
+                onClick = { onScreenSelected(AppScreen.SETTINGS) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings"
                     )
                 },
-
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
             NavigationDrawerItem(
-                label = {
-                    Text("More")
-                },
-
+                label = { Text("More") },
                 selected = currentScreen == AppScreen.MORE,
-
-                onClick = {
-                    onScreenSelected(AppScreen.MORE)
-                },
-
+                onClick = { onScreenSelected(AppScreen.MORE) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More"
                     )
                 },
-
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(
-                modifier = Modifier.height(20.dp)
-            )
+            Spacer(modifier = Modifier.height(20.dp))
 
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
 
-            Spacer(
-                modifier = Modifier.height(20.dp)
-            )
+            Spacer(modifier = Modifier.height(20.dp))
 
-            KnowledgeSummary()
+            KnowledgeSummary(
+                knowledgeStats = knowledgeStats
+            )
         }
     }
 }
 
 @Composable
 private fun DrawerHeader() {
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -182,39 +135,28 @@ private fun DrawerHeader() {
                 horizontal = 24.dp,
                 vertical = 12.dp
             ),
-
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         Icon(
             imageVector = Icons.Default.Book,
             contentDescription = "Offline AI",
             tint = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(
-            modifier = Modifier.width(14.dp)
-        )
+        Spacer(modifier = Modifier.width(14.dp))
 
         Column {
-
             Text(
                 text = "Offline AI",
-
                 style = MaterialTheme.typography.titleLarge,
-
                 color = Color(0xFF101110)
             )
 
-            Spacer(
-                modifier = Modifier.height(2.dp)
-            )
+            Spacer(modifier = Modifier.height(2.dp))
 
             Text(
                 text = "Your private tutor",
-
                 style = MaterialTheme.typography.bodySmall,
-
                 color = Color(0xFF68736D)
             )
         }
@@ -222,37 +164,30 @@ private fun DrawerHeader() {
 }
 
 @Composable
-private fun KnowledgeSummary() {
-
+private fun KnowledgeSummary(
+    knowledgeStats: com.offlineai.app.data.repository.KnowledgeStats
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-
         Text(
             text = "Knowledge",
-
             style = MaterialTheme.typography.titleSmall,
-
             color = Color(0xFF101110)
         )
 
         Text(
-            text = "0 documents",
-
+            text = "${knowledgeStats.files} files",
             style = MaterialTheme.typography.bodySmall,
-
             color = Color(0xFF68736D)
         )
 
         Text(
-            text = "0 lessons • 0 subjects",
-
+            text = "${knowledgeStats.subjects} subjects",
             style = MaterialTheme.typography.bodySmall,
-
             color = Color(0xFF68736D)
         )
     }

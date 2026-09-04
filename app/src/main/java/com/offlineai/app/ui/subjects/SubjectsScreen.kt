@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,17 +20,23 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,7 +61,8 @@ import java.util.Locale
 @Composable
 fun SubjectsScreen(
     repository: StudyRepository,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    onOpenSubject: (SubjectEntity) -> Unit
 ) {
     val scope = rememberCoroutineScope()
 
@@ -72,6 +80,10 @@ fun SubjectsScreen(
 
     var editSubject by remember {
         mutableStateOf<SubjectEntity?>(null)
+    }
+
+    var detailsSubject by remember {
+         mutableStateOf<SubjectEntity?>(null)
     }
 
     var deleteSubject by remember {
@@ -226,17 +238,25 @@ fun SubjectsScreen(
                 items = subjects,
                 key = { it.id }
             ) { subject ->
+              
                 ManagedSubjectCard(
-                    subject = subject,
-                    onRename = {
-                        errorMessage = null
-                        editSubject = subject
-                    },
-                    onDelete = {
-                        errorMessage = null
-                        deleteSubject = subject
-                    }
-                )
+    subject = subject,
+    onOpen = {
+        onOpenSubject(subject)
+    },
+    onRename = {
+        errorMessage = null
+        editSubject = subject
+    },
+    onDetails = {
+        errorMessage = null
+        detailsSubject = subject
+    },
+    onDelete = {
+        errorMessage = null
+        deleteSubject = subject
+    }
+)
             }
 
             if (deletedSubjects.isNotEmpty()) {
@@ -342,45 +362,54 @@ fun SubjectsScreen(
         )
     }
 
-    if (showUpdateConfirmation) {
-        pendingUpdate?.let { update ->
-            ConfirmSubjectUpdateDialog(
-                originalSubject = update.subject,
-                newName = update.newName,
-                newDescription = update.newDescription,
-                onDismiss = {
-                    showUpdateConfirmation = false
-                    pendingUpdate = null
-                },
-                onConfirm = {
-                    scope.launch {
-                        try {
-                            repository.updateSubject(
-                                update.subject.copy(
-                                    name = update.newName,
-                                    description = update.newDescription
-                                )
+  if (showUpdateConfirmation) {
+    pendingUpdate?.let { update ->
+        ConfirmSubjectUpdateDialog(
+            originalSubject = update.subject,
+            newName = update.newName,
+            newDescription = update.newDescription,
+            onDismiss = {
+                showUpdateConfirmation = false
+                pendingUpdate = null
+            },
+            onConfirm = {
+                scope.launch {
+                    try {
+                        repository.updateSubject(
+                            update.subject.copy(
+                                name = update.newName,
+                                description = update.newDescription
                             )
+                        )
 
-                            showUpdateConfirmation = false
-                            pendingUpdate = null
-                            editSubject = null
-                            errorMessage = null
+                        showUpdateConfirmation = false
+                        pendingUpdate = null
+                        editSubject = null
+                        errorMessage = null
 
-                            refresh()
-                        } catch (exception: IllegalArgumentException) {
-                            showUpdateConfirmation = false
-                            pendingUpdate = null
+                        refresh()
+                    } catch (exception: IllegalArgumentException) {
+                        showUpdateConfirmation = false
+                        pendingUpdate = null
 
-                            errorMessage =
-                                exception.message
-                                    ?: "Unable to update subject."
-                        }
+                        errorMessage =
+                            exception.message
+                                ?: "Unable to update subject."
                     }
                 }
-            )
-        }
+            }
+        )
     }
+}
+
+detailsSubject?.let { subject ->
+    SubjectDetailsDialog(
+        subject = subject,
+        onDismiss = {
+            detailsSubject = null
+        }
+    )
+} 
 
     deleteSubject?.let { subject ->
         DeleteSubjectDialog(
@@ -534,16 +563,20 @@ private fun CreateSubjectForm(
             )
 
             OutlinedTextField(
-                value = description,
+                 value = description,
                 onValueChange = {
-                    description = it
-                },
-                modifier = Modifier.fillMaxWidth(),
-                label = {
-                    Text("Description (optional)")
-                },
-                minLines = 3
-            )
+                description = it
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .heightIn(min = 120.dp, max = 220.dp),
+             label = {
+              Text("Description")
+              },
+                  minLines = 3,
+                  maxLines = 8
+                )
+           
 
             if (errorMessage != null) {
                 Spacer(
@@ -666,90 +699,123 @@ private fun FirstSubjectState(
 @Composable
 private fun ManagedSubjectCard(
     subject: SubjectEntity,
+    onOpen: () -> Unit,
     onRename: () -> Unit,
+    onDetails: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var menuExpanded by remember {
+        mutableStateOf(false)
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
+        onClick = onOpen,
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFFF7F9F7)
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                verticalAlignment = Alignment.Top
+            Icon(
+                imageVector = Icons.Default.Book,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(
+                modifier = Modifier.width(14.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Book,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                Text(
+                    text = subject.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
 
-                Spacer(
-                    modifier = Modifier.width(14.dp)
-                )
-
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = subject.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                if (subject.description.isNotBlank()) {
+                    Spacer(
+                        modifier = Modifier.height(3.dp)
                     )
 
-                    if (subject.description.isNotBlank()) {
-                        Spacer(
-                            modifier = Modifier.height(3.dp)
-                        )
-
-                        Text(
-                            text = subject.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = if (subject.description.length > 45) {
+                            subject.description.take(45) + "..."
+                        } else {
+                            subject.description
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
-            Row {
-                TextButton(
-                    onClick = onRename
+            Box {
+                IconButton(
+                    onClick = {
+                        menuExpanded = true
+                    }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = null
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Subject options"
                     )
-
-                    Spacer(
-                        modifier = Modifier.width(4.dp)
-                    )
-
-                    Text("Edit")
                 }
 
-                TextButton(
-                    onClick = onDelete
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = {
+                        menuExpanded = false
+                    }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
+                    DropdownMenuItem(
+                        text = {
+                            Text("Open")
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onOpen()
+                        }
                     )
 
-                    Spacer(
-                        modifier = Modifier.width(4.dp)
+                    DropdownMenuItem(
+                        text = {
+                            Text("Rename / Edit")
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        }
                     )
 
-                    Text(
-                        text = "Delete",
-                        color = MaterialTheme.colorScheme.error
+                    DropdownMenuItem(
+                        text = {
+                            Text("Details")
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onDetails()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Delete",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        }
                     )
                 }
             }
@@ -1005,6 +1071,83 @@ private fun ConfirmSubjectUpdateDialog(
                 onClick = onDismiss
             ) {
                 Text("Go Back")
+            }
+        }
+    )
+}
+
+@Composable
+private fun SubjectDetailsDialog(
+    subject: SubjectEntity,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Subject Details")
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Name",
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+                Text(
+                    text = subject.name,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                Text(
+                    text = "Description",
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+                Text(
+                    text = if (subject.description.isBlank()) {
+                        "No description"
+                    } else {
+                        subject.description
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                Text(
+                    text = "Created",
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+                Text(
+                    text = formatDate(subject.createdAt),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Close")
             }
         }
     )

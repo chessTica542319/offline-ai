@@ -33,5 +33,7 @@ data class StudyContentEntity(
 
     val originalFileName: String = "",
 
+    val fileSize: Long = 0L,
+
     val createdAt: Long = System.currentTimeMillis()
 )

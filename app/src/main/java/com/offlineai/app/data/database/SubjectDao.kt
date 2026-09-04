@@ -5,6 +5,8 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 
+import kotlinx.coroutines.flow.Flow
+
 @Dao
 interface SubjectDao {
 
@@ -47,6 +49,13 @@ interface SubjectDao {
         WHERE deletedAt IS NULL
     """)
     suspend fun countActive(): Int
+
+    @Query("""
+         SELECT COUNT(*)
+         FROM subjects
+         WHERE deletedAt IS NULL
+    """)
+    fun observeActiveCount(): Flow<Int>
 
     @Query("""
         UPDATE subjects
