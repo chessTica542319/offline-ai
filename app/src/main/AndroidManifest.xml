@@ -5,6 +5,7 @@
 
     <application
         android:name=".OfflineAIApplication"
+        android:icon="@drawable/offline_ai"
         android:allowBackup="true"
         android:label="Offline AI"
         android:supportsRtl="true"

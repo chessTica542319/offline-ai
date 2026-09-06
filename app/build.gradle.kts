@@ -19,6 +19,12 @@ android {
         versionName = "1.0"
     }
 
+    androidResources {
+        noCompress += "gguf"
+    }
+
+    
+
     buildTypes {
         release {
             isMinifyEnabled = false

@@ -1,13 +1,16 @@
 package com.offlineai.app.ui.navigation
 
 import android.app.Activity
+import android.content.Context
 import android.net.Uri
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
@@ -16,19 +19,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
-
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+
+import com.offlineai.app.ai.OfflineAiModel
+import com.offlineai.app.ai.OfflineAiNative
 import com.offlineai.app.data.database.AppDatabase
 import com.offlineai.app.data.database.LessonEntity
 import com.offlineai.app.data.database.SubjectEntity
@@ -36,23 +41,23 @@ import com.offlineai.app.data.database.StudyContentEntity
 import com.offlineai.app.data.extraction.PendingStudyContent
 import com.offlineai.app.data.repository.StudyRepository
 import com.offlineai.app.ui.camera.CameraScreen
+import com.offlineai.app.ui.chat.ChatMessage
 import com.offlineai.app.ui.chat.ChatScreen
 import com.offlineai.app.ui.components.AppDrawer
 import com.offlineai.app.ui.importfiles.ContentProcessingScreen
 import com.offlineai.app.ui.importfiles.ContentReviewScreen
 import com.offlineai.app.ui.importfiles.ImportFilesScreen
 import com.offlineai.app.ui.importfiles.ImportReviewScreen
+import com.offlineai.app.ui.subjects.CreateTextFileScreen
 import com.offlineai.app.ui.subjects.LessonContentsScreen
-import com.offlineai.app.ui.subjects.LessonSelectionScreen
 import com.offlineai.app.ui.subjects.SubjectLessonsScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
-import com.offlineai.app.ui.subjects.SubjectsScreen
 import com.offlineai.app.ui.subjects.StudyContentEditScreen
-import com.offlineai.app.ui.subjects.CreateTextFileScreen
+import com.offlineai.app.ui.subjects.SubjectsScreen
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-import android.content.Context
+import kotlinx.coroutines.withContext
 
 enum class AppScreen {
     CHAT,
@@ -73,9 +78,35 @@ enum class AppScreen {
 
 @Composable
 fun AppNavigation() {
+
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
     var currentScreen by remember {
         mutableStateOf(AppScreen.CHAT)
     }
+
+    val chatMessages = remember {
+        mutableStateListOf<ChatMessage>()
+    }
+
+    var chatResponseCount by remember {
+        mutableStateOf(0)
+    }
+
+    var chatDraft by remember {
+        mutableStateOf("")
+    }
+
+    var chatIsGenerating by remember {
+        mutableStateOf(false)
+    }
+
+    var chatScrollDistanceFromBottom by remember {
+        mutableStateOf(0f)
+    }
+
+    val chatListState = rememberLazyListState()
 
     var selectedFiles by remember {
         mutableStateOf<List<Uri>>(emptyList())
@@ -109,12 +140,17 @@ fun AppNavigation() {
         mutableStateOf("")
     }
 
+    var selectedStudyContent: StudyContentEntity? by remember {
+        mutableStateOf(null)
+    }
+
+    var selectedSubjectForTextFile by remember {
+        mutableStateOf<SubjectEntity?>(null)
+    }
+
     val drawerState = rememberDrawerState(
         initialValue = DrawerValue.Closed
     )
-
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
 
     val database = remember {
         AppDatabase.getInstance(context)
@@ -133,16 +169,6 @@ fun AppNavigation() {
         .collectAsState(
             initial = com.offlineai.app.data.repository.KnowledgeStats()
         )
-
-    var selectedStudyContent: StudyContentEntity? by remember {
-            mutableStateOf(null)
-        }
-
-    var selectedSubjectForTextFile by remember {
-            mutableStateOf<SubjectEntity?>(null)
-        }
-
-
 
     var showQuitDialog by remember {
         mutableStateOf(false)
@@ -192,6 +218,7 @@ fun AppNavigation() {
     }
 
     fun startImport(files: List<Uri>) {
+
         if (files.isEmpty()) {
             return
         }
@@ -212,6 +239,242 @@ fun AppNavigation() {
         currentScreen = AppScreen.CONTENT_PROCESSING
     }
 
+    fun stopChatGeneration() {
+        if (chatIsGenerating) {
+            OfflineAiNative.stopGeneration()
+        }
+    }
+
+    fun retryChatMessage(message: ChatMessage) {
+
+    val prompt = message.prompt?.trim()
+
+    if (
+        prompt.isNullOrBlank() ||
+        chatIsGenerating ||
+        chatResponseCount >= 50
+    ) {
+        return
+    }
+
+    val index =
+        chatMessages.indexOfFirst {
+            it.id == message.id
+        }
+
+    if (index < 0) {
+        return
+    }
+
+    val newMessageId = System.nanoTime()
+
+    chatMessages[index] =
+        ChatMessage(
+            id = newMessageId,
+            isUser = false,
+            text = "",
+            prompt = prompt
+        )
+
+    chatIsGenerating = true
+    chatScrollDistanceFromBottom = 0f
+
+    scope.launch {
+
+        val result = runCatching {
+
+            val modelPath =
+                OfflineAiModel.ensureAvailable(context)
+
+            withContext(Dispatchers.IO) {
+
+                OfflineAiNative.loadModel(
+                    modelPath
+                )
+
+                OfflineAiNative.generate(
+                    prompt = """
+                        <|im_start|>system
+                        You are Offline AI, a helpful study assistant. Answer clearly and accurately.
+                        <|im_end|>
+                        <|im_start|>user
+                        $prompt
+                        <|im_end|>
+                        <|im_start|>assistant
+                    """.trimIndent(),
+                    contextSize = 2048,
+                    maxTokens = 1024,
+                    threads = 4
+                )
+            }
+
+        }.getOrElse {
+
+            "Error: ${it.message ?: "Unable to generate a response."}"
+        }
+
+        if (result == "__STOPPED__") {
+
+            val retryIndex =
+                chatMessages.indexOfFirst {
+                    it.id == newMessageId
+                }
+
+            if (retryIndex >= 0) {
+
+                chatMessages[retryIndex] =
+                    ChatMessage(
+                        id = newMessageId,
+                        isUser = false,
+                        text = "You stopped the response",
+                        prompt = prompt
+                    )
+            }
+
+            chatIsGenerating = false
+            return@launch
+        }
+
+        val finalResponse =
+            limitResponseTo60Sentences(result)
+
+        val retryIndex =
+            chatMessages.indexOfFirst {
+                it.id == newMessageId
+            }
+
+        if (retryIndex >= 0) {
+
+            chatMessages[retryIndex] =
+                ChatMessage(
+                    id = newMessageId,
+                    isUser = false,
+                    text = finalResponse,
+                    prompt = prompt
+                )
+        }
+
+        chatResponseCount++
+
+        chatIsGenerating = false
+    }
+}
+
+    fun sendChatMessage() {
+
+        val prompt = chatDraft.trim()
+
+        if (
+            prompt.isBlank() ||
+            chatIsGenerating ||
+            chatResponseCount >= 50
+        ) {
+            return
+        }
+
+        chatDraft = ""
+
+        chatMessages.add(
+            ChatMessage(
+                id = System.nanoTime(),
+                isUser = true,
+                text = prompt
+            )
+        )
+
+        val aiMessageId = System.nanoTime()
+
+        chatMessages.add(
+            ChatMessage(
+                id = aiMessageId,
+                isUser = false,
+                text = "",
+                prompt = prompt
+            )
+        )
+
+        chatIsGenerating = true
+        chatScrollDistanceFromBottom = 0f
+
+        scope.launch {
+
+            val result = runCatching {
+
+                val modelPath =
+                    OfflineAiModel.ensureAvailable(context)
+
+                withContext(Dispatchers.IO) {
+
+                    OfflineAiNative.loadModel(
+                        modelPath
+                    )
+
+                    OfflineAiNative.generate(
+                        prompt = """
+                            <|im_start|>system
+                            You are Offline AI, a helpful study assistant. Answer clearly and accurately.
+                            <|im_end|>
+                            <|im_start|>user
+                            $prompt
+                            <|im_end|>
+                            <|im_start|>assistant
+                        """.trimIndent(),
+                        contextSize = 2048,
+                        maxTokens = 1024,
+                        threads = 4
+                    )
+                }
+
+            }.getOrElse {
+
+                "Error: ${it.message ?: "Unable to generate a response."}"
+            }
+
+            if (result == "__STOPPED__") {
+
+                val index =
+                    chatMessages.indexOfFirst {
+                        it.id == aiMessageId
+                    }
+
+                if (index >= 0) {
+                    chatMessages[index] =
+                        ChatMessage(
+                            id = aiMessageId,
+                            isUser = false,
+                            text = "You stopped the response",
+                            prompt = prompt
+                        )
+                }
+
+                chatIsGenerating = false
+                return@launch
+            }
+
+            val finalResponse =
+                limitResponseTo60Sentences(result)
+
+            val index =
+                chatMessages.indexOfFirst {
+                    it.id == aiMessageId
+                }
+
+            if (index >= 0) {
+                chatMessages[index] =
+                    ChatMessage(
+                        id = aiMessageId,
+                        isUser = false,
+                        text = finalResponse,
+                        prompt = prompt
+                    )
+            }
+
+            chatResponseCount++
+
+            chatIsGenerating = false
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -228,10 +491,31 @@ fun AppNavigation() {
             )
         }
     ) {
+
         when (currentScreen) {
 
             AppScreen.CHAT -> {
+
                 ChatScreen(
+                    messages = chatMessages,
+                    responseCount = chatResponseCount,
+                    message = chatDraft,
+                    onMessageChange = {
+                        chatDraft = it
+                    },
+                    isGenerating = chatIsGenerating,
+                    chatListState = chatListState,
+                    scrollDistanceFromBottom =
+                        chatScrollDistanceFromBottom,
+                    onScrollDistanceChange = {
+                        chatScrollDistanceFromBottom = it
+                    },
+                    onSend = {
+                        sendChatMessage()
+                    },
+                    onStop = {
+                        stopChatGeneration()
+                    },
                     knowledgeStats = knowledgeStats,
                     onOpenDrawer = {
                         scope.launch {
@@ -239,16 +523,28 @@ fun AppNavigation() {
                         }
                     },
                     onImportFiles = {
-                        currentScreen = AppScreen.IMPORT_FILES
+                        currentScreen =
+                            AppScreen.IMPORT_FILES
+                    },
+                    onClearChat = {
+                        chatMessages.clear()
+                        chatResponseCount = 0
+                        chatDraft = ""
+                        chatScrollDistanceFromBottom = 0f
+                    },
+
+                    onRetry = {
+                        retryChatMessage(it)
                     }
                 )
             }
 
             AppScreen.IMPORT_FILES -> {
+
                 ImportFilesScreen(
                     selectedFiles = selectedFiles,
-                    onFilesChanged = { files ->
-                        selectedFiles = files
+                    onFilesChanged = {
+                        selectedFiles = it
                     },
                     onOpenDrawer = {
                         scope.launch {
@@ -258,64 +554,94 @@ fun AppNavigation() {
                     onTakePhoto = {
                         currentScreen = AppScreen.CAMERA
                     },
-                    onContinue = { files ->
-                        startImport(files)
+                    onContinue = {
+                        startImport(it)
                     }
                 )
             }
 
             AppScreen.CONTENT_PROCESSING -> {
+
                 val currentFile =
-                    selectedFiles.getOrNull(currentImportIndex)
+                    selectedFiles.getOrNull(
+                        currentImportIndex
+                    )
 
                 if (currentFile != null) {
+
                     ContentProcessingScreen(
                         fileUri = currentFile,
-                        currentIndex = currentImportIndex + 1,
-                        totalFiles = selectedFiles.size,
+                        currentIndex =
+                            currentImportIndex + 1,
+                        totalFiles =
+                            selectedFiles.size,
                         onSuccess = { result ->
-                            currentExtractedText = result.text
-                            currentSourceType = result.sourceType
-                            currentFileName = result.fileName
+
+                            currentExtractedText =
+                                result.text
+
+                            currentSourceType =
+                                result.sourceType
+
+                            currentFileName =
+                                result.fileName
 
                             currentScreen =
                                 AppScreen.CONTENT_REVIEW
                         },
                         onBack = {
+
                             if (currentImportIndex > 0) {
-                                currentImportIndex -= 1
+
+                                currentImportIndex--
+
                                 currentScreen =
                                     AppScreen.CONTENT_REVIEW
+
                             } else {
+
                                 currentScreen =
                                     AppScreen.IMPORT_FILES
                             }
                         }
                     )
+
                 } else {
+
                     currentScreen =
                         AppScreen.IMPORT_FILES
                 }
             }
 
             AppScreen.CONTENT_REVIEW -> {
+
                 val currentReviewedContent =
-                    reviewedContents.getOrNull(currentImportIndex)
+                    reviewedContents.getOrNull(
+                        currentImportIndex
+                    )
 
                 ContentReviewScreen(
                     fileName = currentFileName,
                     sourceType = currentSourceType,
                     extractedText = currentExtractedText,
-                    currentIndex = currentImportIndex + 1,
-                    totalFiles = selectedFiles.size,
-                    initialTitle = currentReviewedContent?.title,
+                    currentIndex =
+                        currentImportIndex + 1,
+                    totalFiles =
+                        selectedFiles.size,
+                    initialTitle =
+                        currentReviewedContent?.title,
+
                     onBack = {
+
                         if (currentImportIndex > 0) {
+
                             val previousIndex =
                                 currentImportIndex - 1
 
                             val previousContent =
-                                reviewedContents[previousIndex]
+                                reviewedContents[
+                                    previousIndex
+                                ]
 
                             currentImportIndex =
                                 previousIndex
@@ -331,37 +657,47 @@ fun AppNavigation() {
 
                             currentScreen =
                                 AppScreen.CONTENT_REVIEW
+
                         } else {
+
                             currentScreen =
                                 AppScreen.IMPORT_FILES
                         }
                     },
+
                     onContinue = { title, text ->
 
-                      val fileUri =
-    selectedFiles[currentImportIndex]
+                        val fileUri =
+                            selectedFiles[
+                                currentImportIndex
+                            ]
 
-val content =
-    PendingStudyContent(
-        fileUri = fileUri,
-        title = title,
-        text = text,
-        sourceType = currentSourceType,
-        originalFileName = currentFileName,
-        fileSize = getFileSize(
-            context = context,
-            uri = fileUri
-        )
-    ) 
+                        val content =
+                            PendingStudyContent(
+                                fileUri = fileUri,
+                                title = title,
+                                text = text,
+                                sourceType =
+                                    currentSourceType,
+                                originalFileName =
+                                    currentFileName,
+                                fileSize =
+                                    getFileSize(
+                                        context = context,
+                                        uri = fileUri
+                                    )
+                            )
 
                         reviewedContents =
                             if (
                                 currentImportIndex <
                                 reviewedContents.size
                             ) {
+
                                 reviewedContents.mapIndexed {
-                                        index,
-                                        existingContent ->
+                                    index,
+                                    existingContent ->
+
                                     if (
                                         index ==
                                         currentImportIndex
@@ -371,7 +707,9 @@ val content =
                                         existingContent
                                     }
                                 }
+
                             } else {
+
                                 reviewedContents + content
                             }
 
@@ -379,7 +717,8 @@ val content =
                             currentImportIndex + 1 <
                             selectedFiles.size
                         ) {
-                            currentImportIndex += 1
+
+                            currentImportIndex++
 
                             currentExtractedText = ""
                             currentSourceType = ""
@@ -387,7 +726,9 @@ val content =
 
                             currentScreen =
                                 AppScreen.CONTENT_PROCESSING
+
                         } else {
+
                             currentScreen =
                                 AppScreen.SUBJECT_SELECTION
                         }
@@ -395,88 +736,135 @@ val content =
                 )
             }
 
-          AppScreen.SUBJECT_SELECTION -> {
-    SubjectSelectionScreen(
-        selectedFilesCount = reviewedContents.size,
-        repository = repository,
-        onOpenDrawer = {
-            scope.launch {
-                drawerState.open()
-            }
-        },
-        onBack = {
-            if (selectedFiles.isNotEmpty()) {
-                currentImportIndex = selectedFiles.lastIndex
-                currentScreen = AppScreen.CONTENT_REVIEW
-            } else {
-                currentScreen = AppScreen.IMPORT_FILES
-            }
-        },
-        onSubjectSelected = { subject ->
-            selectedSubject = subject
-            currentScreen = AppScreen.IMPORT_REVIEW
-        }
-    )
-}   
+            AppScreen.SUBJECT_SELECTION -> {
 
-          AppScreen.IMPORT_REVIEW -> {
-    val subject = selectedSubject
-
-    if (subject != null) {
-        ImportReviewScreen(
-            reviewedContents = reviewedContents,
-            subject = subject,
-            onOpenDrawer = {
-                scope.launch {
-                    drawerState.open()
-                }
-            },
-            onBack = {
-                currentScreen = AppScreen.SUBJECT_SELECTION
-            },
-            onConfirm = {
-                scope.launch {
-                    try {
-                        val generalLesson =
-                            repository.getOrCreateGeneralLesson(
-                                subjectId = subject.id
-                            )
-
-                        repository.saveStudyContents(
-                            lessonId = generalLesson.id,
-                            contents = reviewedContents
-                        )
-
-                        selectedFiles = emptyList()
-                        reviewedContents = emptyList()
-                        currentImportIndex = 0
-                        currentExtractedText = ""
-                        currentSourceType = ""
-                        currentFileName = ""
-                        selectedSubject = null
-                        selectedLesson = null
-
-                        currentScreen = AppScreen.CHAT
-                    } catch (exception: Exception) {
-                        currentScreen = AppScreen.IMPORT_REVIEW
-                    }
-                }
-            }
-        )
-    } else {
-        currentScreen = AppScreen.SUBJECT_SELECTION
-    }
-} 
-
-            AppScreen.SUBJECTS -> {
-                SubjectsScreen(
+                SubjectSelectionScreen(
+                    selectedFilesCount =
+                        reviewedContents.size,
                     repository = repository,
+
                     onOpenDrawer = {
                         scope.launch {
                             drawerState.open()
                         }
                     },
+
+                    onBack = {
+
+                        if (selectedFiles.isNotEmpty()) {
+
+                            currentImportIndex =
+                                selectedFiles.lastIndex
+
+                            currentScreen =
+                                AppScreen.CONTENT_REVIEW
+
+                        } else {
+
+                            currentScreen =
+                                AppScreen.IMPORT_FILES
+                        }
+                    },
+
+                    onSubjectSelected = { subject ->
+
+                        selectedSubject = subject
+
+                        currentScreen =
+                            AppScreen.IMPORT_REVIEW
+                    }
+                )
+            }
+
+            AppScreen.IMPORT_REVIEW -> {
+
+                val subject = selectedSubject
+
+                if (subject != null) {
+
+                    ImportReviewScreen(
+                        reviewedContents =
+                            reviewedContents,
+                        subject = subject,
+
+                        onOpenDrawer = {
+                            scope.launch {
+                                drawerState.open()
+                            }
+                        },
+
+                        onBack = {
+                            currentScreen =
+                                AppScreen.SUBJECT_SELECTION
+                        },
+
+                        onConfirm = {
+
+                            scope.launch {
+
+                                try {
+
+                                    val generalLesson =
+                                        repository
+                                            .getOrCreateGeneralLesson(
+                                                subjectId =
+                                                    subject.id
+                                            )
+
+                                    repository
+                                        .saveStudyContents(
+                                            lessonId =
+                                                generalLesson.id,
+                                            contents =
+                                                reviewedContents
+                                        )
+
+                                    selectedFiles =
+                                        emptyList()
+
+                                    reviewedContents =
+                                        emptyList()
+
+                                    currentImportIndex = 0
+                                    currentExtractedText = ""
+                                    currentSourceType = ""
+                                    currentFileName = ""
+
+                                    selectedSubject = null
+                                    selectedLesson = null
+
+                                    currentScreen =
+                                        AppScreen.CHAT
+
+                                } catch (_: Exception) {
+
+                                    currentScreen =
+                                        AppScreen.IMPORT_REVIEW
+                                }
+                            }
+                        }
+                    )
+
+                } else {
+
+                    currentScreen =
+                        AppScreen.SUBJECT_SELECTION
+                }
+            }
+
+            AppScreen.SUBJECTS -> {
+
+                SubjectsScreen(
+                    repository = repository,
+
+                    onOpenDrawer = {
+                        scope.launch {
+                            drawerState.open()
+                        }
+                    },
+
                     onOpenSubject = { subject ->
+
                         selectedSubject = subject
                         selectedLesson = null
 
@@ -486,100 +874,166 @@ val content =
                 )
             }
 
-          AppScreen.SUBJECT_LESSONS -> {
-    val subject = selectedSubject
+            AppScreen.SUBJECT_LESSONS -> {
 
-    if (subject != null) {
-        SubjectLessonsScreen(
-            subject = subject,
-            repository = repository,
-            onOpenDrawer = {
-                scope.launch {
-                    drawerState.open()
-                }
-            },
-            onBack = {
-                selectedSubject = null
-                currentScreen = AppScreen.SUBJECTS
-            },
-            onOpenLesson = { lesson ->
-                selectedLesson = lesson
-                currentScreen = AppScreen.LESSON_CONTENTS
-            },
-            onEditContent = { content ->
-                selectedStudyContent = content
-                currentScreen = AppScreen.STUDY_CONTENT_EDIT
-            },
-            onCreateTextFile = {
-                selectedSubjectForTextFile = subject
-                     currentScreen = AppScreen.CREATE_TEXT_FILE
-                }
-        )
-    } else {
-        currentScreen = AppScreen.SUBJECTS
-    }
-}
+                val subject = selectedSubject
 
-            AppScreen.STUDY_CONTENT_EDIT -> {
-    val content = selectedStudyContent
+                if (subject != null) {
 
-    if (content != null) {
-        StudyContentEditScreen(
-            content = content,
-            onBack = {
-                selectedStudyContent = null
-                currentScreen = AppScreen.SUBJECT_LESSONS
-            },
-            onSave = { updatedContent ->
-                scope.launch {
-                    repository.updateStudyContent(updatedContent)
-                    selectedStudyContent = null
-                    currentScreen = AppScreen.SUBJECT_LESSONS
-                }
-            }
-        )
-    } else {
-        currentScreen = AppScreen.SUBJECT_LESSONS
-    }
-}
+                    SubjectLessonsScreen(
+                        subject = subject,
+                        repository = repository,
 
-            AppScreen.CREATE_TEXT_FILE -> {
-    val subject = selectedSubjectForTextFile
+                        onOpenDrawer = {
+                            scope.launch {
+                                drawerState.open()
+                            }
+                        },
 
-    if (subject != null) {
-        CreateTextFileScreen(
-            subject = subject,
-            onBack = {
-                selectedSubjectForTextFile = null
-                currentScreen = AppScreen.SUBJECT_LESSONS
-            },
-            onSave = { title, text ->
-                scope.launch {
-                    val lesson =
-                        repository.getOrCreateGeneralLesson(
-                            subject.id
-                        )
+                        onBack = {
 
-                    repository.saveStudyContent(
-                        lessonId = lesson.id,
-                        title = title,
-                        text = text,
-                        sourceType = "TEXT",
-                        originalFileName = "$title.txt",
-                        fileSize = text.length.toLong()
+                            selectedSubject = null
+
+                            currentScreen =
+                                AppScreen.SUBJECTS
+                        },
+
+                        onOpenLesson = { lesson ->
+
+                            selectedLesson = lesson
+
+                            currentScreen =
+                                AppScreen.LESSON_CONTENTS
+                        },
+
+                        onEditContent = { content ->
+
+                            selectedStudyContent = content
+
+                            currentScreen =
+                                AppScreen.STUDY_CONTENT_EDIT
+                        },
+
+                        onCreateTextFile = {
+
+                            selectedSubjectForTextFile =
+                                subject
+
+                            currentScreen =
+                                AppScreen.CREATE_TEXT_FILE
+                        }
                     )
 
-                    selectedSubjectForTextFile = null
-                    currentScreen = AppScreen.SUBJECT_LESSONS
+                } else {
+
+                    currentScreen =
+                        AppScreen.SUBJECTS
                 }
             }
-        )
-    } else {
-        currentScreen = AppScreen.SUBJECTS
-    }
-}
+
+            AppScreen.STUDY_CONTENT_EDIT -> {
+
+                val content =
+                    selectedStudyContent
+
+                if (content != null) {
+
+                    StudyContentEditScreen(
+                        content = content,
+
+                        onBack = {
+
+                            selectedStudyContent = null
+
+                            currentScreen =
+                                AppScreen.SUBJECT_LESSONS
+                        },
+
+                        onSave = { updatedContent ->
+
+                            scope.launch {
+
+                                repository
+                                    .updateStudyContent(
+                                        updatedContent
+                                    )
+
+                                selectedStudyContent = null
+
+                                currentScreen =
+                                    AppScreen.SUBJECT_LESSONS
+                            }
+                        }
+                    )
+
+                } else {
+
+                    currentScreen =
+                        AppScreen.SUBJECT_LESSONS
+                }
+            }
+
+            AppScreen.CREATE_TEXT_FILE -> {
+
+                val subject =
+                    selectedSubjectForTextFile
+
+                if (subject != null) {
+
+                    CreateTextFileScreen(
+                        subject = subject,
+
+                        onBack = {
+
+                            selectedSubjectForTextFile =
+                                null
+
+                            currentScreen =
+                                AppScreen.SUBJECT_LESSONS
+                        },
+
+                        onSave = { title, text ->
+
+                            scope.launch {
+
+                                val lesson =
+                                    repository
+                                        .getOrCreateGeneralLesson(
+                                            subject.id
+                                        )
+
+                                repository
+                                    .saveStudyContent(
+                                        lessonId =
+                                            lesson.id,
+                                        title = title,
+                                        text = text,
+                                        sourceType = "TEXT",
+                                        originalFileName =
+                                            "$title.txt",
+                                        fileSize =
+                                            text.length
+                                                .toLong()
+                                    )
+
+                                selectedSubjectForTextFile =
+                                    null
+
+                                currentScreen =
+                                    AppScreen.SUBJECT_LESSONS
+                            }
+                        }
+                    )
+
+                } else {
+
+                    currentScreen =
+                        AppScreen.SUBJECTS
+                }
+            }
 
             AppScreen.LESSON_CONTENTS -> {
+
                 val subject = selectedSubject
                 val lesson = selectedLesson
 
@@ -587,49 +1041,61 @@ val content =
                     subject != null &&
                     lesson != null
                 ) {
+
                     LessonContentsScreen(
                         subject = subject,
                         lesson = lesson,
                         repository = repository,
+
                         onOpenDrawer = {
                             scope.launch {
                                 drawerState.open()
                             }
                         },
+
                         onBack = {
+
                             selectedLesson = null
 
                             currentScreen =
                                 AppScreen.SUBJECT_LESSONS
                         },
-                        onOpenContent = { content ->
-                            // Content viewer will be added next.
+
+                        onOpenContent = {
                         }
                     )
+
                 } else {
+
                     currentScreen =
                         AppScreen.SUBJECTS
                 }
             }
 
             AppScreen.CAMERA -> {
+
                 CameraScreen(
+
                     onOpenDrawer = {
                         scope.launch {
                             drawerState.open()
                         }
                     },
+
                     onBack = {
+
                         currentScreen =
                             AppScreen.IMPORT_FILES
                     },
+
                     onPhotoReady = { uri ->
 
                         selectedFiles =
-                            (selectedFiles + uri)
-                                .distinctBy {
-                                    it.toString()
-                                }
+                            (
+                                selectedFiles + uri
+                            ).distinctBy {
+                                it.toString()
+                            }
 
                         currentScreen =
                             AppScreen.IMPORT_FILES
@@ -638,6 +1104,7 @@ val content =
             }
 
             AppScreen.SETTINGS -> {
+
                 PlaceholderScreen(
                     title = "Settings",
                     onOpenDrawer = {
@@ -649,6 +1116,7 @@ val content =
             }
 
             AppScreen.MORE -> {
+
                 PlaceholderScreen(
                     title = "More",
                     onOpenDrawer = {
@@ -666,17 +1134,59 @@ private fun getFileSize(
     context: Context,
     uri: Uri
 ): Long {
+
     return try {
+
         context.contentResolver
-            .openAssetFileDescriptor(uri, "r")
+            .openAssetFileDescriptor(
+                uri,
+                "r"
+            )
             ?.use { descriptor ->
                 descriptor.length
             }
-            ?.takeIf { it >= 0L }
+            ?.takeIf {
+                it >= 0L
+            }
             ?: 0L
+
     } catch (_: Exception) {
+
         0L
     }
+}
+
+private fun limitResponseTo60Sentences(
+    text: String
+): String {
+
+    val cleaned = text.trim()
+
+    if (cleaned.isBlank()) {
+        return cleaned
+    }
+
+    val sentences =
+        Regex(
+            """[^.!?]*[.!?]+(?:\s+|$)|[^.!?]+$"""
+        )
+            .findAll(cleaned)
+            .map {
+                it.value.trim()
+            }
+            .filter {
+                it.isNotBlank()
+            }
+            .toList()
+
+    if (sentences.size <= 60) {
+        return cleaned
+    }
+
+    return sentences
+        .take(60)
+        .joinToString(" ")
+        .trim()
 }
 
 @Composable
@@ -684,9 +1194,11 @@ private fun PlaceholderScreen(
     title: String,
     onOpenDrawer: () -> Unit
 ) {
+
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
+
         com.offlineai.app.ui.components.AppTopBar(
             title = title,
             onOpenDrawer = onOpenDrawer
@@ -698,6 +1210,7 @@ private fun PlaceholderScreen(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
+
             Text(
                 text = "$title\nComing soon",
                 modifier = Modifier.padding(24.dp),
