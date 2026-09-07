@@ -57,4 +57,22 @@ interface StudyContentDao {
         WHERE subjects.deletedAt IS NULL
     """)
     fun observeActiveCount(): Flow<Int>
+
+   @Query("""
+        SELECT study_content.*
+        FROM study_content
+        INNER JOIN study_content_fts
+            ON study_content.id = study_content_fts.rowid
+        INNER JOIN lessons
+            ON study_content.lessonId = lessons.id
+        INNER JOIN subjects
+            ON lessons.subjectId = subjects.id
+        WHERE subjects.deletedAt IS NULL
+        AND study_content_fts MATCH :query
+        LIMIT :limit
+    """)
+    suspend fun searchRelevantContent(
+        query: String,
+        limit: Int
+    ): List<StudyContentEntity> 
 }

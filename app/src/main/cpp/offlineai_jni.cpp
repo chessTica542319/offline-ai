@@ -150,6 +150,7 @@ Java_com_offlineai_app_ai_OfflineAiNative_generate(
     const llama_vocab * vocab =
             llama_model_get_vocab(g_model);
 
+
     const int prompt_length =
             -llama_tokenize(
                     vocab,

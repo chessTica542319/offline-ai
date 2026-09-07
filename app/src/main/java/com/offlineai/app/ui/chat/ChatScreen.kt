@@ -1,5 +1,7 @@
 package com.offlineai.app.ui.chat
 
+import android.widget.Toast
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -58,6 +60,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 
 import com.offlineai.app.data.repository.KnowledgeStats
 import com.offlineai.app.ui.components.AppTopBar
@@ -85,6 +88,9 @@ fun ChatScreen(
 
     val clipboardManager =
         LocalClipboardManager.current
+
+    val context =
+        LocalContext.current
 
     val scrollScope =
         rememberCoroutineScope()
@@ -335,6 +341,12 @@ fun ChatScreen(
                 chatMessage.text
             )
         )
+
+        Toast.makeText(
+            context,
+            "Copied to clipboard",
+            Toast.LENGTH_SHORT
+        ).show()  
     },
     onRetry = {
         onRetry(chatMessage)
@@ -486,57 +498,85 @@ private fun ChatMessageCard(
                 )
 
                if (
-    !message.isUser &&
-    message.text.isNotBlank()
-) {
+                    message.isUser &&
+                    message.text.isNotBlank()
+                ) {
 
-    Spacer(
-        modifier =
-            Modifier.height(4.dp)
-    )
+                    Spacer(
+                        modifier =
+                            Modifier.height(4.dp)
+                    )
 
-    Row(
-        horizontalArrangement =
-            Arrangement.spacedBy(2.dp)
-    ) {
+                    IconButton(
+                        onClick = onCopy,
+                        modifier =
+                            Modifier.size(34.dp)
+                    ) {
 
-        IconButton(
-            onClick = onCopy,
-            modifier =
-                Modifier.size(34.dp)
-        ) {
+                        Icon(
+                            imageVector =
+                                Icons.Default.ContentCopy,
+                            contentDescription =
+                                "Copy prompt",
+                            tint =
+                                Color(0xFF4CAF50),
+                            modifier =
+                                Modifier.size(18.dp)
+                        )
+                    }
 
-            Icon(
-                imageVector =
-                    Icons.Default.ContentCopy,
-                contentDescription =
-                    "Copy response",
-                tint =
-                    Color(0xFF4CAF50),
-                modifier =
-                    Modifier.size(18.dp)
-            )
-        }
+                } else if (
+                    !message.isUser &&
+                    message.text.isNotBlank()
+                ) {
 
-        IconButton(
-            onClick = onRetry,
-            modifier =
-                Modifier.size(34.dp)
-        ) {
+                    Spacer(
+                        modifier =
+                            Modifier.height(4.dp)
+                    )
 
-            Icon(
-                imageVector =
-                    Icons.Default.Refresh,
-                contentDescription =
-                    "Regenerate response",
-                tint =
-                    MaterialTheme.colorScheme.primary,
-                modifier =
-                    Modifier.size(20.dp)
-            )
-        }
-    }
-} 
+                    Row(
+                        horizontalArrangement =
+                            Arrangement.spacedBy(2.dp)
+                    ) {
+
+                        IconButton(
+                            onClick = onCopy,
+                            modifier =
+                                Modifier.size(34.dp)
+                        ) {
+
+                            Icon(
+                                imageVector =
+                                    Icons.Default.ContentCopy,
+                                contentDescription =
+                                    "Copy response",
+                                tint =
+                                    Color(0xFF4CAF50),
+                                modifier =
+                                    Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onRetry,
+                            modifier =
+                                Modifier.size(34.dp)
+                        ) {
+
+                            Icon(
+                                imageVector =
+                                    Icons.Default.Refresh,
+                                contentDescription =
+                                    "Regenerate response",
+                                tint =
+                                    MaterialTheme.colorScheme.primary,
+                                modifier =
+                                    Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                } 
 
             }
         }
@@ -777,7 +817,7 @@ private fun ChatInput(
                 )
     ) {
 
-        OutlinedTextField(
+       OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier =
@@ -800,19 +840,18 @@ private fun ChatInput(
                         }
                 )
             },
-            singleLine = true,
+            minLines = 1,
+            maxLines = 5,
             enabled =
                 enabled &&
                     !isGenerating,
             keyboardOptions =
                 KeyboardOptions(
-                    imeAction =
-                        ImeAction.Send
+                    imeAction = ImeAction.Default
                 ),
             keyboardActions =
                 KeyboardActions(
-                    onSend = {
-
+                    onDone = {
                         if (
                             enabled &&
                             !isGenerating &&
@@ -822,7 +861,7 @@ private fun ChatInput(
                         }
                     }
                 )
-        )
+        ) 
 
         IconButton(
             onClick = {

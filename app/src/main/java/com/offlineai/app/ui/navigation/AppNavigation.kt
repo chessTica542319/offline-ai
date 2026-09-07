@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.net.Uri
 
+import android.widget.Toast
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,9 @@ import com.offlineai.app.data.database.SubjectEntity
 import com.offlineai.app.data.database.StudyContentEntity
 import com.offlineai.app.data.extraction.PendingStudyContent
 import com.offlineai.app.data.repository.StudyRepository
+import com.offlineai.app.data.repository.KnowledgeContextBuilder
+import com.offlineai.app.data.repository.KnowledgeSearch
+
 import com.offlineai.app.ui.camera.CameraScreen
 import com.offlineai.app.ui.chat.ChatMessage
 import com.offlineai.app.ui.chat.ChatScreen
@@ -164,6 +169,10 @@ fun AppNavigation() {
         )
     }
 
+    val knowledgeSearch = remember(repository) {
+        KnowledgeSearch(repository)
+    }
+
     val knowledgeStats by repository
         .observeKnowledgeStats()
         .collectAsState(
@@ -283,8 +292,40 @@ fun AppNavigation() {
 
         val result = runCatching {
 
+            val relevantContents =
+                withContext(Dispatchers.IO) {
+                    knowledgeSearch.search(
+                        question = prompt,
+                        limit = 5
+                    )
+                }
+
+            val knowledgeContext =
+                KnowledgeContextBuilder.build(
+                    relevantContents
+                )
+
             val modelPath =
                 OfflineAiModel.ensureAvailable(context)
+
+            val aiPrompt = """
+                <|im_start|>system
+                You are Offline AI, a helpful study assistant. Answer clearly and accurately.
+
+                Use the user's local study materials below as the primary source when they are relevant.
+
+                $knowledgeContext
+
+                If the study materials do not contain enough information to answer the question,
+    say that the available study materials do not contain enough information.
+    Do not invent facts and do not pretend that unsupported information came from the study materials.
+
+                <|im_end|>
+                <|im_start|>user
+                $prompt
+                <|im_end|>
+                <|im_start|>assistant
+            """.trimIndent()
 
             withContext(Dispatchers.IO) {
 
@@ -293,15 +334,7 @@ fun AppNavigation() {
                 )
 
                 OfflineAiNative.generate(
-                    prompt = """
-                        <|im_start|>system
-                        You are Offline AI, a helpful study assistant. Answer clearly and accurately.
-                        <|im_end|>
-                        <|im_start|>user
-                        $prompt
-                        <|im_end|>
-                        <|im_start|>assistant
-                    """.trimIndent(),
+                    prompt = aiPrompt,
                     contextSize = 2048,
                     maxTokens = 1024,
                     threads = 4
@@ -400,30 +433,54 @@ fun AppNavigation() {
 
             val result = runCatching {
 
+               val relevantContents =
+                    withContext(Dispatchers.IO) {
+                        knowledgeSearch.search(
+                            question = prompt,
+                            limit = 5
+                        )
+                    }
+
+                val knowledgeContext =
+                    KnowledgeContextBuilder.build(
+                        relevantContents
+                    )
+
                 val modelPath =
                     OfflineAiModel.ensureAvailable(context)
 
-                withContext(Dispatchers.IO) {
+                val aiPrompt = """
+                    <|im_start|>system
+                    You are Offline AI, a helpful study assistant. Answer clearly and accurately.
+
+                    Use the user's local study materials below as the primary source when they are relevant.
+
+                    $knowledgeContext
+
+                    If the study materials do not contain enough information to answer the question,
+    say that the available study materials do not contain enough information.
+    Do not invent facts and do not pretend that unsupported information came from the study materials.
+
+                    <|im_end|>
+                    <|im_start|>user
+                    $prompt
+                    <|im_end|>
+                    <|im_start|>assistant
+                """.trimIndent()
+
+                    withContext(Dispatchers.IO) {
 
                     OfflineAiNative.loadModel(
                         modelPath
                     )
 
                     OfflineAiNative.generate(
-                        prompt = """
-                            <|im_start|>system
-                            You are Offline AI, a helpful study assistant. Answer clearly and accurately.
-                            <|im_end|>
-                            <|im_start|>user
-                            $prompt
-                            <|im_end|>
-                            <|im_start|>assistant
-                        """.trimIndent(),
+                        prompt = aiPrompt,
                         contextSize = 2048,
                         maxTokens = 1024,
                         threads = 4
                     )
-                }
+                } 
 
             }.getOrElse {
 
@@ -818,6 +875,17 @@ fun AppNavigation() {
                                             contents =
                                                 reviewedContents
                                         )
+
+                                    Toast.makeText(
+                                        context,
+                                        if (reviewedContents.size == 1) {
+                                            "File imported successfully"
+                                        } else {
+                                            "${reviewedContents.size} files imported successfully"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+
 
                                     selectedFiles =
                                         emptyList()

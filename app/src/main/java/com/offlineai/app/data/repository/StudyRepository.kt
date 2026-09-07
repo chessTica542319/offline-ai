@@ -261,8 +261,31 @@ class StudyRepository(
         studyContentDao.delete(id)
     }
 
+   suspend fun searchRelevantStudyContents(
+        query: String,
+        limit: Int = 5
+    ): List<StudyContentEntity> {
+        val cleanQuery = query
+            .trim()
+            .split(Regex("\\s+"))
+            .map { it.replace(Regex("[^A-Za-z0-9_]+"), "") }
+            .filter { it.length >= 2 }
+            .distinct()
+            .joinToString(" OR ")
+
+        if (cleanQuery.isBlank()) {
+            return emptyList()
+        }
+
+        return studyContentDao.searchRelevantContent(
+            query = cleanQuery,
+            limit = limit.coerceIn(1, 10)
+        )
+    } 
+
     suspend fun getStudyContentCount(): Int =
         studyContentDao.count()
+
 
     fun observeKnowledgeStats(): Flow<KnowledgeStats> {
         return combine(

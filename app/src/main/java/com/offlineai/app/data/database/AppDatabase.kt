@@ -13,9 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LessonEntity::class,
         SourceEntity::class,
         ExtractedTextEntity::class,
-        StudyContentEntity::class
+        StudyContentEntity::class,
+        StudyContentFtsEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -168,6 +169,25 @@ abstract class AppDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS study_content_fts
+                        USING fts4(
+                            title,
+                            text,
+                            originalFileName,
+                            content='study_content'
+                        )
+                        """.trimIndent()
+                    )
+                }
+            }
+
         fun getInstance(
             context: Context
         ): AppDatabase {
@@ -181,7 +201,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5
+                        MIGRATION_4_5,
+                        MIGRATION_5_6
                     )
                     .build()
                     .also {
