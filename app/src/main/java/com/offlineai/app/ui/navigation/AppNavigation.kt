@@ -45,6 +45,8 @@ import com.offlineai.app.data.repository.StudyRepository
 import com.offlineai.app.data.repository.KnowledgeContextBuilder
 import com.offlineai.app.data.repository.KnowledgeSearch
 import com.offlineai.app.data.repository.StudyContentChunkRepository
+import com.offlineai.app.data.repository.ChunkKnowledgeSearch
+import com.offlineai.app.data.repository.ChunkKnowledgeContextBuilder
 
 import com.offlineai.app.ui.camera.CameraScreen
 import com.offlineai.app.ui.chat.ChatMessage
@@ -60,6 +62,9 @@ import com.offlineai.app.ui.subjects.SubjectLessonsScreen
 import com.offlineai.app.ui.subjects.SubjectSelectionScreen
 import com.offlineai.app.ui.subjects.StudyContentEditScreen
 import com.offlineai.app.ui.subjects.SubjectsScreen
+
+import com.offlineai.app.ai.ChatGenerationConfig
+import com.offlineai.app.ai.ChatGenerationService
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -162,19 +167,53 @@ fun AppNavigation() {
         AppDatabase.getInstance(context)
     }
 
+   val chunkRepository = remember {
+        StudyContentChunkRepository(
+            database.studyContentChunkDao()
+        )
+    }
+
     val repository = remember {
         StudyRepository(
             database.subjectDao(),
             database.lessonDao(),
             database.studyContentDao(),
-            StudyContentChunkRepository(
-                database.studyContentChunkDao()
-            )
+            chunkRepository
         )
-    }
+    } 
 
     val knowledgeSearch = remember(repository) {
         KnowledgeSearch(repository)
+    }
+
+    val chunkKnowledgeSearch = remember(chunkRepository) {
+        ChunkKnowledgeSearch(chunkRepository)
+    }
+
+    val chunkKnowledgeContextBuilder = remember {
+        ChunkKnowledgeContextBuilder()
+    }
+
+    val chatGenerationConfig = remember {
+        ChatGenerationConfig()
+    }
+
+    val knowledgeContextBuilder = remember {
+        KnowledgeContextBuilder()
+    }
+
+    val chatGenerationService = remember(
+        context,
+        knowledgeSearch,
+        knowledgeContextBuilder,
+        chatGenerationConfig
+    ) {
+        ChatGenerationService(
+            context = context,
+            knowledgeSearch = knowledgeSearch,
+            knowledgeContextBuilder = knowledgeContextBuilder,
+            config = chatGenerationConfig
+        )
     }
 
     val knowledgeStats by repository
@@ -292,63 +331,12 @@ fun AppNavigation() {
     chatIsGenerating = true
     chatScrollDistanceFromBottom = 0f
 
-    scope.launch {
+   scope.launch {
 
-        val result = runCatching {
-
-            val relevantContents =
-                withContext(Dispatchers.IO) {
-                    knowledgeSearch.search(
-                        question = prompt,
-                        limit = 5
-                    )
-                }
-
-            val knowledgeContext =
-                KnowledgeContextBuilder.build(
-                    relevantContents
-                )
-
-            val modelPath =
-                OfflineAiModel.ensureAvailable(context)
-
-            val aiPrompt = """
-                <|im_start|>system
-                You are Offline AI, a helpful study assistant. Answer clearly and accurately.
-
-                Use the user's local study materials below as the primary source when they are relevant.
-
-                $knowledgeContext
-
-                If the study materials do not contain enough information to answer the question,
-    say that the available study materials do not contain enough information.
-    Do not invent facts and do not pretend that unsupported information came from the study materials.
-
-                <|im_end|>
-                <|im_start|>user
-                $prompt
-                <|im_end|>
-                <|im_start|>assistant
-            """.trimIndent()
-
-            withContext(Dispatchers.IO) {
-
-                OfflineAiNative.loadModel(
-                    modelPath
-                )
-
-                OfflineAiNative.generate(
-                    prompt = aiPrompt,
-                    contextSize = 2048,
-                    maxTokens = 1024,
-                    threads = 4
-                )
-            }
-
-        }.getOrElse {
-
-            "Error: ${it.message ?: "Unable to generate a response."}"
-        }
+        val result =
+            chatGenerationService.generate(
+                question = prompt
+            )
 
         if (result == "__STOPPED__") {
 
@@ -373,7 +361,9 @@ fun AppNavigation() {
         }
 
         val finalResponse =
-            limitResponseTo60Sentences(result)
+            chatGenerationService.limitResponse(
+                result
+            )
 
         val retryIndex =
             chatMessages.indexOfFirst {
@@ -394,7 +384,7 @@ fun AppNavigation() {
         chatResponseCount++
 
         chatIsGenerating = false
-    }
+    } 
 }
 
     fun sendChatMessage() {
@@ -435,70 +425,22 @@ fun AppNavigation() {
 
         scope.launch {
 
-            val result = runCatching {
+           scope.launch {
 
-               val relevantContents =
-                    withContext(Dispatchers.IO) {
-                        knowledgeSearch.search(
-                            question = prompt,
-                            limit = 5
-                        )
-                    }
-
-                val knowledgeContext =
-                    KnowledgeContextBuilder.build(
-                        relevantContents
+                val result =
+                    chatGenerationService.generate(
+                        question = prompt
                     )
 
-                val modelPath =
-                    OfflineAiModel.ensureAvailable(context)
+                if (result == "__STOPPED__") {
 
-                val aiPrompt = """
-                    <|im_start|>system
-                    You are Offline AI, a helpful study assistant. Answer clearly and accurately.
-
-                    Use the user's local study materials below as the primary source when they are relevant.
-
-                    $knowledgeContext
-
-                    If the study materials do not contain enough information to answer the question,
-    say that the available study materials do not contain enough information.
-    Do not invent facts and do not pretend that unsupported information came from the study materials.
-
-                    <|im_end|>
-                    <|im_start|>user
-                    $prompt
-                    <|im_end|>
-                    <|im_start|>assistant
-                """.trimIndent()
-
-                    withContext(Dispatchers.IO) {
-
-                    OfflineAiNative.loadModel(
-                        modelPath
-                    )
-
-                    OfflineAiNative.generate(
-                        prompt = aiPrompt,
-                        contextSize = 2048,
-                        maxTokens = 1024,
-                        threads = 4
-                    )
-                } 
-
-            }.getOrElse {
-
-                "Error: ${it.message ?: "Unable to generate a response."}"
-            }
-
-            if (result == "__STOPPED__") {
-
-                val index =
-                    chatMessages.indexOfFirst {
-                        it.id == aiMessageId
-                    }
+                    val index =
+                        chatMessages.indexOfFirst {
+                            it.id == aiMessageId
+                        }
 
                 if (index >= 0) {
+
                     chatMessages[index] =
                         ChatMessage(
                             id = aiMessageId,
@@ -513,7 +455,9 @@ fun AppNavigation() {
             }
 
             val finalResponse =
-                limitResponseTo60Sentences(result)
+                chatGenerationService.limitResponse(
+                    result
+                )
 
             val index =
                 chatMessages.indexOfFirst {
@@ -521,6 +465,7 @@ fun AppNavigation() {
                 }
 
             if (index >= 0) {
+
                 chatMessages[index] =
                     ChatMessage(
                         id = aiMessageId,
@@ -533,7 +478,7 @@ fun AppNavigation() {
             chatResponseCount++
 
             chatIsGenerating = false
-        }
+        } 
     }
 
     ModalNavigationDrawer(
