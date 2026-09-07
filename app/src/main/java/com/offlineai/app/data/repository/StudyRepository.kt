@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.combine
 class StudyRepository(
     private val subjectDao: SubjectDao,
     private val lessonDao: LessonDao,
-    private val studyContentDao: StudyContentDao
+    private val studyContentDao: StudyContentDao,
+    private val studyContentChunkRepository: StudyContentChunkRepository
 ) {
 
     companion object {
@@ -189,7 +190,7 @@ class StudyRepository(
             ?: error("Failed to create General lesson.")
     }
 
-    suspend fun saveStudyContent(
+   suspend fun saveStudyContent(
         lessonId: Long,
         title: String,
         text: String,
@@ -203,16 +204,22 @@ class StudyRepository(
             "Content title cannot be empty."
         }
 
-        return studyContentDao.insert(
-            StudyContentEntity(
-                lessonId = lessonId,
-                title = cleanTitle,
-                text = text,
-                sourceType = sourceType,
-                originalFileName = originalFileName,
-                fileSize = fileSize
-            )
+        val content = StudyContentEntity(
+            lessonId = lessonId,
+            title = cleanTitle,
+            text = text,
+            sourceType = sourceType,
+            originalFileName = originalFileName,
+            fileSize = fileSize
         )
+
+        val contentId = studyContentDao.insert(content)
+
+        studyContentChunkRepository.indexStudyContent(
+            content.copy(id = contentId)
+        )
+
+        return contentId
     }
 
     suspend fun saveStudyContents(
@@ -253,11 +260,18 @@ class StudyRepository(
         content: StudyContentEntity
     ) {
         studyContentDao.update(content)
+
+        studyContentChunkRepository.indexStudyContent(
+            content
+        )
     }
 
     suspend fun deleteStudyContent(
         id: Long
     ) {
+        studyContentChunkRepository.deleteStudyContentChunks(
+            id
+        )
         studyContentDao.delete(id)
     }
 

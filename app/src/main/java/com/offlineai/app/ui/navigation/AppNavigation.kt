@@ -44,6 +44,7 @@ import com.offlineai.app.data.extraction.PendingStudyContent
 import com.offlineai.app.data.repository.StudyRepository
 import com.offlineai.app.data.repository.KnowledgeContextBuilder
 import com.offlineai.app.data.repository.KnowledgeSearch
+import com.offlineai.app.data.repository.StudyContentChunkRepository
 
 import com.offlineai.app.ui.camera.CameraScreen
 import com.offlineai.app.ui.chat.ChatMessage
@@ -165,7 +166,10 @@ fun AppNavigation() {
         StudyRepository(
             database.subjectDao(),
             database.lessonDao(),
-            database.studyContentDao()
+            database.studyContentDao(),
+            StudyContentChunkRepository(
+                database.studyContentChunkDao()
+            )
         )
     }
 

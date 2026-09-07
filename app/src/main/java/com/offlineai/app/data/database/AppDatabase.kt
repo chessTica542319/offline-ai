@@ -14,9 +14,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SourceEntity::class,
         ExtractedTextEntity::class,
         StudyContentEntity::class,
-        StudyContentFtsEntity::class
+        StudyContentFtsEntity::class,
+        StudyContentChunkEntity::class,
+        StudyContentChunkFtsEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun extractedTextDao(): ExtractedTextDao
 
     abstract fun studyContentDao(): StudyContentDao
+
+    abstract fun studyContentChunkDao(): StudyContentChunkDao
 
     companion object {
 
@@ -188,6 +192,51 @@ abstract class AppDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS study_content_chunks (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            studyContentId INTEGER NOT NULL,
+                            chunkIndex INTEGER NOT NULL,
+                            text TEXT NOT NULL,
+                            FOREIGN KEY(studyContentId)
+                                REFERENCES study_content(id)
+                                ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        CREATE INDEX IF NOT EXISTS index_study_content_chunks_studyContentId
+                        ON study_content_chunks(studyContentId)
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        private val MIGRATION_7_8 =
+            object : Migration(7, 8) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS study_content_chunk_fts
+                        USING fts4(
+                            text,
+                            content='study_content_chunks'
+                        )
+                        """.trimIndent()
+                    )
+                }
+            }
+
         fun getInstance(
             context: Context
         ): AppDatabase {
@@ -202,7 +251,9 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_2_3,
                         MIGRATION_3_4,
                         MIGRATION_4_5,
-                        MIGRATION_5_6
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
                     )
                     .build()
                     .also {
