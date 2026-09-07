@@ -199,7 +199,7 @@ fun AppNavigation() {
     }
 
     val knowledgeContextBuilder = remember {
-        KnowledgeContextBuilder()
+        KnowledgeContextBuilder
     }
 
     val chatGenerationService = remember(
@@ -422,8 +422,6 @@ fun AppNavigation() {
 
         chatIsGenerating = true
         chatScrollDistanceFromBottom = 0f
-
-        scope.launch {
 
            scope.launch {
 
