@@ -68,10 +68,12 @@ import com.offlineai.app.ai.ChatGenerationConfig
 import com.offlineai.app.ai.ChatGenerationService
 import com.offlineai.app.ai.AIEngineManager
 import com.offlineai.app.ai.SessionMemory
+import com.offlineai.app.ai.resetChatSession
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
 
 enum class AppScreen {
     CHAT,
@@ -118,6 +120,18 @@ fun AppNavigation() {
 
     var chatScrollDistanceFromBottom by remember {
         mutableStateOf(0f)
+    }
+
+    var chatSessionId by remember {
+        mutableStateOf(0L)
+    }
+
+    var showResetSessionDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var showSessionLimitDialog by remember {
+        mutableStateOf(false)
     }
 
     val chatListState = rememberLazyListState()
@@ -287,6 +301,100 @@ fun AppNavigation() {
         )
     }
 
+    fun resetCurrentChatSession() {
+
+    chatSessionId = System.nanoTime()
+
+    resetChatSession(
+        messages = chatMessages,
+        sessionMemory = sessionMemory,
+        clearDraft = {
+            chatDraft = ""
+        },
+        resetResponseCount = {
+            chatResponseCount = 0
+        },
+        resetScrollDistance = {
+            chatScrollDistanceFromBottom = 0f
+        },
+        stopGeneration = {
+            aiEngineManager.stopGeneration()
+        }
+    )
+
+    chatIsGenerating = false
+    showResetSessionDialog = false
+    showSessionLimitDialog = false
+}
+
+    if (showResetSessionDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showResetSessionDialog = false
+            },
+            title = {
+                Text("Reset session?")
+            },
+            text = {
+                Text(
+                    "This will clear the current chat and temporary session memory. Your imported study materials will not be deleted."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        resetCurrentChatSession()
+                    }
+                ) {
+                    Text("RESET")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showResetSessionDialog = false
+                    }
+                ) {
+                    Text("CANCEL")
+                }
+            }
+        )
+    }
+
+    if (showSessionLimitDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSessionLimitDialog = false
+            },
+            title = {
+                Text("Session limit reached")
+            },
+            text = {
+                Text(
+                    "This session has reached the maximum of 50 AI responses. Reset the session to start a new chat."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        resetCurrentChatSession()
+                    }
+                ) {
+                    Text("RESET")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showSessionLimitDialog = false
+                    }
+                ) {
+                    Text("CANCEL")
+                }
+            }
+        )
+    }
+
     fun startImport(files: List<Uri>) {
 
         if (files.isEmpty()) {
@@ -313,7 +421,7 @@ fun AppNavigation() {
         if (chatIsGenerating) {
             aiEngineManager.stopGeneration()
         }
-    } 
+    }
 
     fun retryChatMessage(message: ChatMessage) {
 
@@ -349,6 +457,10 @@ fun AppNavigation() {
     chatIsGenerating = true
     chatScrollDistanceFromBottom = 0f
 
+    chatResponseCount++
+
+    val generationSessionId = chatSessionId
+
    scope.launch {
 
         val result =
@@ -356,7 +468,11 @@ fun AppNavigation() {
                 question = prompt
             )
 
-        if (result == "__STOPPED__") {
+       if (result == "__STOPPED__") {
+
+            if (generationSessionId != chatSessionId) {
+                return@launch
+            }
 
             val retryIndex =
                 chatMessages.indexOfFirst {
@@ -375,6 +491,15 @@ fun AppNavigation() {
             }
 
             chatIsGenerating = false
+
+            if (chatResponseCount >= 50) {
+                showSessionLimitDialog = true
+            }
+
+            return@launch
+        }
+
+        if (generationSessionId != chatSessionId) {
             return@launch
         }
 
@@ -402,11 +527,12 @@ fun AppNavigation() {
                     prompt = prompt
                 )
         }
-
-        chatResponseCount++
-
         chatIsGenerating = false
-    } 
+
+        if (chatResponseCount >= 50) {
+            showSessionLimitDialog = true
+        }
+    }
 }
 
     fun sendChatMessage() {
@@ -446,6 +572,9 @@ fun AppNavigation() {
 
         chatIsGenerating = true
         chatScrollDistanceFromBottom = 0f
+        chatResponseCount++
+
+        val generationSessionId = chatSessionId
 
            scope.launch {
 
@@ -454,32 +583,45 @@ fun AppNavigation() {
                         question = prompt
                     )
 
-                if (result == "__STOPPED__") {
+               if (result == "__STOPPED__") {
+
+                    if (generationSessionId != chatSessionId) {
+                        return@launch
+                    }
 
                     val index =
                         chatMessages.indexOfFirst {
                             it.id == aiMessageId
                         }
 
-                if (index >= 0) {
+                    if (index >= 0) {
 
-                    chatMessages[index] =
-                        ChatMessage(
-                            id = aiMessageId,
-                            isUser = false,
-                            text = "You stopped the response",
-                            prompt = prompt
-                        )
-                }
+                        chatMessages[index] =
+                            ChatMessage(
+                                id = aiMessageId,
+                                isUser = false,
+                                text = "You stopped the response",
+                                prompt = prompt
+                            )
+                    }
 
-                chatIsGenerating = false
-                return@launch
-            }
+                    chatIsGenerating = false
+
+                    if (chatResponseCount >= 50) {
+                        showSessionLimitDialog = true
+                    }
+
+                    return@launch
+                } 
 
             val finalResponse =
                 chatGenerationService.limitResponse(
                     result
                 )
+
+            if (generationSessionId != chatSessionId) {
+                return@launch
+            }
 
             sessionMemory.addAssistantMessage(
                 finalResponse
@@ -500,10 +642,11 @@ fun AppNavigation() {
                         prompt = prompt
                     )
             }
-
-            chatResponseCount++
-
             chatIsGenerating = false
+
+            if (chatResponseCount >= 50) {
+                showSessionLimitDialog = true
+            }
         } 
     }
 
@@ -565,6 +708,13 @@ fun AppNavigation() {
                         chatResponseCount = 0
                         chatDraft = ""
                         chatScrollDistanceFromBottom = 0f
+                    },
+
+                    onResetSession = {
+                        showResetSessionDialog = true
+                    },
+                    onSessionLimitReached = {
+                        showSessionLimitDialog = true
                     },
 
                     onRetry = {

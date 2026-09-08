@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
+
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +46,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +67,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 
+import com.offlineai.app.ui.chat.ChatMessage
 import com.offlineai.app.data.repository.KnowledgeStats
 import com.offlineai.app.ai.AIEngineStatus
 import com.offlineai.app.ui.components.AppTopBar
@@ -85,6 +91,8 @@ fun ChatScreen(
     onOpenDrawer: () -> Unit,
     onImportFiles: () -> Unit,
     onClearChat: () -> Unit,
+    onResetSession: () -> Unit,
+    onSessionLimitReached: () -> Unit,
     onRetry: (ChatMessage) -> Unit
 ) {
 
@@ -251,15 +259,33 @@ fun ChatScreen(
                     Alignment.CenterVertically
             ) {
 
-                Text(
-                    text =
-                        "Responses this session: " +
-                            "$responseCount / 50",
-                    style =
-                        MaterialTheme.typography.bodySmall,
-                    color =
-                        Color(0xFF68736D)
-                )
+                Column {
+
+                    Text(
+                        text =
+                            "Responses this session: " +
+                                "$responseCount / 50",
+                        style =
+                            MaterialTheme.typography.bodySmall,
+                        color =
+                            Color(0xFF68736D)
+                    )
+
+                    TextButton(
+                        onClick = {
+                            onResetSession()
+                        },
+                        contentPadding =
+                            PaddingValues(0.dp)
+                    ) {
+
+                        Text(
+                            text = "Reset session",
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
 
                 Text(
                     text =
@@ -457,19 +483,20 @@ fun ChatScreen(
             }
         }
 
-        ChatInput(
+       ChatInput(
             value = message,
             onValueChange =
                 onMessageChange,
             onSend = onSend,
             onStop = onStop,
+            onLimitReached = onSessionLimitReached,
             isGenerating =
                 isGenerating,
             enabled =
                 responseCount < 50
-        )
+            ) 
+        }
     }
-}
 
 @Composable
 private fun ChatMessageCard(
@@ -852,6 +879,7 @@ private fun ChatInput(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onLimitReached: () -> Unit,
     isGenerating: Boolean,
     enabled: Boolean
 ) {
@@ -867,51 +895,72 @@ private fun ChatInput(
                 )
     ) {
 
-       OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+        Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(end = 56.dp),
-            placeholder = {
+                    .padding(end = 56.dp)
+        ) {
 
-                Text(
-                    text =
-                        when {
-                            isGenerating ->
-                                "AI is thinking..."
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier =
+                    Modifier.fillMaxWidth(),
+                placeholder = {
 
-                            !enabled ->
-                                "Session response limit reached"
+                    Text(
+                        text =
+                            when {
+                                isGenerating ->
+                                    "AI is thinking..."
 
-                            else ->
-                                "Ask anything..."
+                                !enabled ->
+                                    "Session response limit reached"
+
+                                else ->
+                                    "Ask anything..."
+                            }
+                    )
+                },
+                minLines = 1,
+                maxLines = 5,
+                enabled =
+                    enabled &&
+                        !isGenerating,
+                keyboardOptions =
+                    KeyboardOptions(
+                        imeAction = ImeAction.Default
+                    ),
+                keyboardActions =
+                    KeyboardActions(
+                        onDone = {
+                            if (
+                                enabled &&
+                                    !isGenerating &&
+                                value.isNotBlank()
+                            ) {
+                                onSend()
+                            }
                         }
+                    )
+            )
+
+            if (
+                !enabled &&
+                !isGenerating
+            ) {
+
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .clickable {
+                                onLimitReached()
+                            }
                 )
-            },
-            minLines = 1,
-            maxLines = 5,
-            enabled =
-                enabled &&
-                    !isGenerating,
-            keyboardOptions =
-                KeyboardOptions(
-                    imeAction = ImeAction.Default
-                ),
-            keyboardActions =
-                KeyboardActions(
-                    onDone = {
-                        if (
-                            enabled &&
-                            !isGenerating &&
-                            value.isNotBlank()
-                        ) {
-                            onSend()
-                        }
-                    }
-                )
-        ) 
+            }
+        }
 
         IconButton(
             onClick = {
