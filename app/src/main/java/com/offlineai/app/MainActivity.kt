@@ -50,7 +50,7 @@ fun OfflineAIApp() {
          * - llama.cpp
          */
 
-        delay(1800)
+        delay(3000)
 
         isInitializing = false
     }
