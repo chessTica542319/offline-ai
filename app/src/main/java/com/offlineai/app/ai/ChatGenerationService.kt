@@ -1,17 +1,17 @@
 package com.offlineai.app.ai
 
-import android.content.Context
-
-import com.offlineai.app.data.repository.KnowledgeContextBuilder
-import com.offlineai.app.data.repository.KnowledgeSearch
-
+import com.offlineai.app.data.repository.ChunkKnowledgeContextBuilder
+import com.offlineai.app.data.repository.ChunkKnowledgeSearch
+import com.offlineai.app.data.repository.StudyRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class ChatGenerationService(
-    private val context: Context,
-    private val knowledgeSearch: KnowledgeSearch,
-    private val knowledgeContextBuilder: KnowledgeContextBuilder,
+    private val chunkKnowledgeSearch: ChunkKnowledgeSearch,
+    private val studyRepository: StudyRepository,
+    private val chunkKnowledgeContextBuilder: ChunkKnowledgeContextBuilder,
+    private val aiEngineManager: AIEngineManager,
+    private val sessionMemory: SessionMemory,
     private val config: ChatGenerationConfig
 ) {
 
@@ -27,23 +27,46 @@ class ChatGenerationService(
 
         return runCatching {
 
-            val relevantContents =
+            val chunks =
                 withContext(Dispatchers.IO) {
-                    knowledgeSearch.search(
+                    chunkKnowledgeSearch.search(
                         question = cleanQuestion,
                         limit = config.maxRetrievedContents
                     )
                 }
 
+            val contents =
+                withContext(Dispatchers.IO) {
+
+                    chunks
+                        .mapNotNull { chunk ->
+                            studyRepository.getStudyContent(
+                                chunk.studyContentId
+                            )
+                        }
+                        .distinctBy {
+                            it.id
+                        }
+                }
+
             val knowledgeContext =
-                knowledgeContextBuilder.build(
-                    relevantContents
+                chunkKnowledgeContextBuilder.build(
+                    chunks = chunks,
+                    contents = contents
                 )
 
-            val modelPath =
-                OfflineAiModel.ensureAvailable(
-                    context
-                )
+            val sessionContext =
+                sessionMemory.buildContext()
+
+            val sessionSection =
+                if (sessionContext.isBlank()) {
+                    "No previous conversation messages are available."
+                } else {
+                    """
+                    Previous conversation in this session:
+                    $sessionContext
+                    """.trimIndent()
+                }
 
             val aiPrompt = """
                 <|im_start|>system
@@ -53,9 +76,16 @@ class ChatGenerationService(
 
                 $knowledgeContext
 
+                $sessionSection
+
+                Use the previous conversation to understand follow-up questions and references.
+                Do not treat previous assistant answers as authoritative facts when the study
+                materials provide better information.
+
                 If the study materials do not contain enough information to answer the question,
                 say that the available study materials do not contain enough information.
-                Do not invent facts and do not pretend that unsupported information came from the study materials.
+                Do not invent facts and do not pretend that unsupported information came from
+                the study materials.
 
                 <|im_end|>
                 <|im_start|>user
@@ -64,19 +94,12 @@ class ChatGenerationService(
                 <|im_start|>assistant
             """.trimIndent()
 
-            withContext(Dispatchers.IO) {
-
-                OfflineAiNative.loadModel(
-                    modelPath
-                )
-
-                OfflineAiNative.generate(
-                    prompt = aiPrompt,
-                    contextSize = config.contextSize,
-                    maxTokens = config.maxTokens,
-                    threads = config.threads
-                )
-            }
+            aiEngineManager.generate(
+                prompt = aiPrompt,
+                contextSize = config.contextSize,
+                maxTokens = config.maxTokens,
+                threads = config.threads
+            )
 
         }.getOrElse {
 
@@ -107,7 +130,10 @@ class ChatGenerationService(
                 }
                 .toList()
 
-        if (sentences.size <= config.maxResponseSentences) {
+        if (
+            sentences.size <=
+            config.maxResponseSentences
+        ) {
             return cleaned
         }
 

@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 
 import com.offlineai.app.data.repository.KnowledgeStats
+import com.offlineai.app.ai.AIEngineStatus
 import com.offlineai.app.ui.components.AppTopBar
 
 import kotlinx.coroutines.launch
@@ -71,6 +72,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     messages: androidx.compose.runtime.snapshots.SnapshotStateList<ChatMessage>,
     responseCount: Int,
+    aiEngineStatus: AIEngineStatus,
     message: String,
     onMessageChange: (String) -> Unit,
     isGenerating: Boolean,
@@ -241,14 +243,62 @@ fun ChatScreen(
                 )
         ) {
 
-            Text(
-                text =
-                    "Responses this session: " +
-                        "$responseCount / 50",
-                style =
-                    MaterialTheme.typography.bodySmall,
-                color = Color(0xFF68736D)
-            )
+           Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text =
+                        "Responses this session: " +
+                            "$responseCount / 50",
+                    style =
+                        MaterialTheme.typography.bodySmall,
+                    color =
+                        Color(0xFF68736D)
+                )
+
+                Text(
+                    text =
+            when (aiEngineStatus) {
+                AIEngineStatus.IDLE ->
+                    "AI idle"
+
+                AIEngineStatus.LOADING ->
+                    "Loading AI..."
+
+                AIEngineStatus.READY ->
+                    "AI ready"
+
+                AIEngineStatus.GENERATING ->
+                    "AI thinking..."
+
+                AIEngineStatus.STOPPING ->
+                    "Stopping..."
+
+                AIEngineStatus.ERROR ->
+                    "AI error"
+            },
+                    style =
+                        MaterialTheme.typography.bodySmall,
+                    color =
+                        when (aiEngineStatus) {
+                            AIEngineStatus.ERROR ->
+                                MaterialTheme.colorScheme.error
+
+                            AIEngineStatus.GENERATING,
+                            AIEngineStatus.LOADING,
+                            AIEngineStatus.STOPPING ->
+                                MaterialTheme.colorScheme.primary
+
+                            else ->
+                                Color(0xFF68736D)
+                        }
+                )
+            } 
         }
 
         Box(

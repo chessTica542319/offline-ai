@@ -41,12 +41,13 @@ import com.offlineai.app.data.database.LessonEntity
 import com.offlineai.app.data.database.SubjectEntity
 import com.offlineai.app.data.database.StudyContentEntity
 import com.offlineai.app.data.extraction.PendingStudyContent
-import com.offlineai.app.data.repository.StudyRepository
+
 import com.offlineai.app.data.repository.KnowledgeContextBuilder
 import com.offlineai.app.data.repository.KnowledgeSearch
 import com.offlineai.app.data.repository.StudyContentChunkRepository
 import com.offlineai.app.data.repository.ChunkKnowledgeSearch
 import com.offlineai.app.data.repository.ChunkKnowledgeContextBuilder
+import com.offlineai.app.data.repository.StudyRepository
 
 import com.offlineai.app.ui.camera.CameraScreen
 import com.offlineai.app.ui.chat.ChatMessage
@@ -65,6 +66,8 @@ import com.offlineai.app.ui.subjects.SubjectsScreen
 
 import com.offlineai.app.ai.ChatGenerationConfig
 import com.offlineai.app.ai.ChatGenerationService
+import com.offlineai.app.ai.AIEngineManager
+import com.offlineai.app.ai.SessionMemory
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -198,23 +201,38 @@ fun AppNavigation() {
         ChatGenerationConfig()
     }
 
+    val aiEngineManager = remember(context) {
+        AIEngineManager(context)
+    }
+
+    val aiEngineStatus by
+        aiEngineManager.status.collectAsState()
+
+    val sessionMemory = remember {
+        SessionMemory()
+    }
+
     val knowledgeContextBuilder = remember {
         KnowledgeContextBuilder
     }
 
-    val chatGenerationService = remember(
-        context,
-        knowledgeSearch,
-        knowledgeContextBuilder,
+   val chatGenerationService = remember(
+        chunkKnowledgeSearch,
+        repository,
+        chunkKnowledgeContextBuilder,
+        aiEngineManager,
+        sessionMemory,
         chatGenerationConfig
     ) {
         ChatGenerationService(
-            context = context,
-            knowledgeSearch = knowledgeSearch,
-            knowledgeContextBuilder = knowledgeContextBuilder,
+            chunkKnowledgeSearch = chunkKnowledgeSearch,
+            studyRepository = repository,
+            chunkKnowledgeContextBuilder = chunkKnowledgeContextBuilder,
+            aiEngineManager = aiEngineManager,
+            sessionMemory = sessionMemory,
             config = chatGenerationConfig
         )
-    }
+    } 
 
     val knowledgeStats by repository
         .observeKnowledgeStats()
@@ -291,11 +309,11 @@ fun AppNavigation() {
         currentScreen = AppScreen.CONTENT_PROCESSING
     }
 
-    fun stopChatGeneration() {
+   fun stopChatGeneration() {
         if (chatIsGenerating) {
-            OfflineAiNative.stopGeneration()
+            aiEngineManager.stopGeneration()
         }
-    }
+    } 
 
     fun retryChatMessage(message: ChatMessage) {
 
@@ -365,6 +383,10 @@ fun AppNavigation() {
                 result
             )
 
+        sessionMemory.replaceLastAssistantMessage(
+            finalResponse
+            )
+
         val retryIndex =
             chatMessages.indexOfFirst {
                 it.id == newMessageId
@@ -408,6 +430,8 @@ fun AppNavigation() {
                 text = prompt
             )
         )
+
+        sessionMemory.addUserMessage(prompt)
 
         val aiMessageId = System.nanoTime()
 
@@ -457,6 +481,10 @@ fun AppNavigation() {
                     result
                 )
 
+            sessionMemory.addAssistantMessage(
+                finalResponse
+                )
+
             val index =
                 chatMessages.indexOfFirst {
                     it.id == aiMessageId
@@ -503,6 +531,7 @@ fun AppNavigation() {
                 ChatScreen(
                     messages = chatMessages,
                     responseCount = chatResponseCount,
+                    aiEngineStatus = aiEngineStatus,
                     message = chatDraft,
                     onMessageChange = {
                         chatDraft = it
@@ -532,6 +561,7 @@ fun AppNavigation() {
                     },
                     onClearChat = {
                         chatMessages.clear()
+                        sessionMemory.clear()
                         chatResponseCount = 0
                         chatDraft = ""
                         chatScrollDistanceFromBottom = 0f
