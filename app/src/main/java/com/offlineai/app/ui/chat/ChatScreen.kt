@@ -566,13 +566,19 @@ private fun ChatMessageCard(
 
             } else {
 
-                Text(
-                    text = message.text,
-                    style =
+               if (message.isUser) {
+                    Text(
+                        text = message.text,
+                        style =
                         MaterialTheme.typography.bodyLarge,
-                    color =
+                        color =
                         Color(0xFF101110)
-                )
+                    )
+                } else {
+                    ChatMessageRenderer(
+                        text = message.text
+                    )
+                } 
 
                if (
                     message.isUser &&
