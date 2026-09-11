@@ -1,5 +1,9 @@
 const chatMathParts = [];
 
+const MATH_START = "\uE000";
+const MATH_END = "\uE001";
+
+
 function protectMath(value) {
 
     const index =
@@ -8,16 +12,14 @@ function protectMath(value) {
     chatMathParts.push(value);
 
     return (
-        "MATHPLACEHOLDER" +
+        MATH_START +
         index +
-        "X"
+        MATH_END
     );
 }
 
 
-function prepareMathText(text) {
-
-    chatMathParts.length = 0;
+function protectExplicitMath(text) {
 
     let result = text;
 
@@ -53,65 +55,394 @@ function prepareMathText(text) {
             }
         );
 
+    return result;
+}
+
+
+function normalizeMathExpression(
+    value
+) {
+
+    let result =
+        value.trim();
+
     result =
         result.replace(
-            /(?<![A-Za-z0-9_])([A-Za-z])\^\{([^}\n]+)\}/g,
-            function(match) {
-
-                return protectMath(
-                    "\\(" +
-                    match[1] +
-                    "^{" +
-                    match[2] +
-                    "}" +
-                    "\\)"
-                );
-            }
+            /\^\s*\(([^()\r\n]+)\)/g,
+            "^{$1}"
         );
 
     result =
         result.replace(
-            /(?<![A-Za-z0-9_])([A-Za-z])\^([A-Za-z0-9]+)/g,
-            function(match) {
-
-                return protectMath(
-                    "\\(" +
-                    match[1] +
-                    "^{" +
-                    match[2] +
-                    "}" +
-                    "\\)"
-                );
-            }
+            /_\s*\(([^()\r\n]+)\)/g,
+            "_{$1}"
         );
 
     result =
         result.replace(
-            /(?<![A-Za-z0-9_])([A-Za-z])_([A-Za-z0-9]+)/g,
-            function(match) {
-
-                return protectMath(
-                    "\\(" +
-                    match[1] +
-                    "_{" +
-                    match[2] +
-                    "}" +
-                    "\\)"
-                );
-            }
+            /\^\s*\{([^{}\r\n]+)\}/g,
+            "^{$1}"
         );
 
     result =
         result.replace(
-            /(?<![A-Za-z0-9_])([A-Za-z]\s*\/\s*[A-Za-z0-9]+)(?![A-Za-z0-9_])/g,
-            function(match) {
+            /_\s*\{([^{}\r\n]+)\}/g,
+            "_{$1}"
+        );
 
-                return protectMath(
-                    "\\(" +
-                    match[1] +
-                    "\\)"
-                );
-            }
+    result =
+        result.replace(
+            /\^\s*([A-Za-z0-9]+)/g,
+            "^{$1}"
+        );
+
+    result =
+        result.replace(
+            /_\s*([A-Za-z0-9]+)/g,
+            "_{$1}"
+        );
+
+    result =
+        result.replace(
+            /\*/g,
+            "\\times "
+        );
+
+    result =
+        result.replace(
+            /×/g,
+            "\\times "
+        );
+
+    result =
+        result.replace(
+            /÷/g,
+            "\\div "
+        );
+
+    result =
+        result.replace(
+            /≤/g,
+            "\\le "
+        );
+
+    result =
+        result.replace(
+            /≥/g,
+            "\\ge "
+        );
+
+    result =
+        result.replace(
+            /≠/g,
+            "\\ne "
+        );
+
+    return result;
+}
+
+
+function isAllowedMathWord(
+    word
+) {
+
+    const value =
+        word.toLowerCase();
+
+    if (
+        /^[a-z]$/.test(value)
+    ) {
+        return true;
+    }
+
+    if (
+        /^(sin|cos|tan|cot|sec|csc|log|ln|exp|sqrt|arcsin|arccos|arctan)$/.test(
+            value
+        )
+    ) {
+        return true;
+    }
+
+    if (
+        /^(dy|dx|dt|du|dv|dw)$/.test(value)
+    ) {
+        return true;
+    }
+
+    if (
+        /^d[0-9]*[a-z]$/.test(value)
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+
+function isValidMathExpression(
+    value
+) {
+
+    const text =
+        value.trim();
+
+    if (
+        text.length <= 1
+    ) {
+        return false;
+    }
+
+    if (
+        /^[0-9]+$/.test(text)
+    ) {
+        return false;
+    }
+
+    if (
+        /^[A-Za-z]$/.test(text)
+    ) {
+        return false;
+    }
+
+    const words =
+        text.match(
+            /[A-Za-z]+/g
+        );
+
+    if (
+        !words
+    ) {
+        return false;
+    }
+
+    for (
+        let i = 0;
+        i < words.length;
+        i++
+    ) {
+
+        if (
+            !isAllowedMathWord(
+                words[i]
+            )
+        ) {
+            return false;
+        }
+    }
+
+    if (
+        /^[A-Za-z]+$/.test(text)
+    ) {
+        return false;
+    }
+
+    if (
+        /^[A-Za-z]'{0,2}\s*\([^()\r\n]+\)$/.test(
+            text
+        )
+    ) {
+        return true;
+    }
+
+    if (
+        /^[A-Za-z]'{0,2}\s*\([^()\r\n]+\)\s*=\s*.+$/.test(
+            text
+        )
+    ) {
+        return true;
+    }
+
+    if (
+        /^\([^()\r\n]+\)$/.test(
+            text
+        )
+    ) {
+        return true;
+    }
+
+    if (
+        /^\{[^{}\r\n]+\}$/.test(
+            text
+        )
+    ) {
+        return true;
+    }
+
+    if (
+        /[=+\-*/^_]/.test(text)
+    ) {
+        return true;
+    }
+
+    if (
+        /[×÷≤≥≠]/.test(text)
+    ) {
+        return true;
+    }
+
+    if (
+        /\d+\s*[A-Za-z]/.test(text)
+    ) {
+        return true;
+    }
+
+    if (
+        /[A-Za-z]\s*\d+/.test(text)
+    ) {
+        return true;
+    }
+
+    if (
+        /[A-Za-z]\s*\(/.test(text)
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+
+function findMathCandidates(
+    text
+) {
+
+    const candidates = [];
+
+    const pattern =
+        /(?<![A-Za-z0-9])((?:[+-]\s*)?(?:[A-Za-z]{1,3}'{0,2}\s*\([^()\r\n]+\)|[A-Za-z0-9]+)(?:\s*(?:\^|_|=|\+|\-|\*|\/|<|>|≤|≥|≠)\s*(?:[A-Za-z0-9]+|\([^()\r\n]+\)|\{[^{}\r\n]+\}))*)(?![A-Za-z0-9])/g;
+
+    let match;
+
+    while (
+        (match =
+            pattern.exec(text)) !== null
+    ) {
+
+        const value =
+            match[1];
+
+        if (
+            value.length <= 1
+        ) {
+            continue;
+        }
+
+        if (
+            !isValidMathExpression(
+                value
+            )
+        ) {
+            continue;
+        }
+
+        candidates.push({
+            start:
+                match.index +
+                match[0].indexOf(value),
+
+            end:
+                match.index +
+                match[0].indexOf(value) +
+                value.length,
+
+            value:
+                value
+        });
+    }
+
+    return candidates;
+}
+
+
+function protectMathCandidates(
+    text
+) {
+
+    const candidates =
+        findMathCandidates(
+            text
+        );
+
+    if (
+        candidates.length === 0
+    ) {
+        return text;
+    }
+
+    let result = text;
+
+    for (
+        let i =
+            candidates.length - 1;
+        i >= 0;
+        i--
+    ) {
+
+        const candidate =
+            candidates[i];
+
+        const before =
+            result.charAt(
+                candidate.start - 1
+            );
+
+        const after =
+            result.charAt(
+                candidate.end
+            );
+
+        if (
+            /[A-Za-z0-9]/.test(
+                before
+            ) ||
+            /[A-Za-z0-9]/.test(
+                after
+            )
+        ) {
+            continue;
+        }
+
+        const normalized =
+            normalizeMathExpression(
+                candidate.value
+            );
+
+        result =
+            result.substring(
+                0,
+                candidate.start
+            ) +
+            protectMath(
+                "\\(" +
+                normalized +
+                "\\)"
+            ) +
+            result.substring(
+                candidate.end
+            );
+    }
+
+    return result;
+}
+
+
+function prepareMathText(
+    text
+) {
+
+    chatMathParts.length = 0;
+
+    let result =
+        text;
+
+    result =
+        protectExplicitMath(
+            result
+        );
+
+    result =
+        protectMathCandidates(
+            result
         );
 
     return result;
@@ -133,8 +464,8 @@ function restoreMathText(
     let node;
 
     while (
-        node =
-            walker.nextNode()
+        (node =
+            walker.nextNode()) !== null
     ) {
 
         nodes.push(node);
@@ -143,12 +474,12 @@ function restoreMathText(
     nodes.forEach(
         function(textNode) {
 
-            let text =
+            const text =
                 textNode.nodeValue;
 
             if (
                 !text.includes(
-                    "MATHPLACEHOLDER"
+                    MATH_START
                 )
             ) {
                 return;
@@ -158,7 +489,7 @@ function restoreMathText(
                 document.createDocumentFragment();
 
             const pattern =
-                /MATHPLACEHOLDER(\d+)X/g;
+                /\uE000(\d+)\uE001/g;
 
             let lastIndex = 0;
             let match;
@@ -190,6 +521,22 @@ function restoreMathText(
 
                 const math =
                     chatMathParts[index];
+
+                if (
+                    math === undefined
+                ) {
+
+                    fragment.appendChild(
+                        document.createTextNode(
+                            match[0]
+                        )
+                    );
+
+                    lastIndex =
+                        pattern.lastIndex;
+
+                    continue;
+                }
 
                 const isDisplay =
                     math.startsWith(

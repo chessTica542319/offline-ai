@@ -2,12 +2,6 @@ package com.offlineai.app.ui.chat
 
 import android.widget.Toast
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,18 +19,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.CircleShape
 
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 
 import androidx.compose.runtime.Composable
@@ -57,19 +50,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
 
-import com.offlineai.app.ui.chat.ChatMessage
-import com.offlineai.app.data.repository.KnowledgeStats
 import com.offlineai.app.ai.AIEngineStatus
+import com.offlineai.app.data.repository.KnowledgeStats
 import com.offlineai.app.ui.components.AppTopBar
 
 import kotlinx.coroutines.launch
@@ -214,7 +206,9 @@ fun ChatScreen(
 
             localScrollDistance = 0f
 
-            onScrollDistanceChange(0f)
+            onScrollDistanceChange(
+                0f
+            )
         }
     }
 
@@ -229,12 +223,15 @@ fun ChatScreen(
 
             localScrollDistance = 0f
 
-            onScrollDistanceChange(0f)
+            onScrollDistanceChange(
+                0f
+            )
         }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier =
+            Modifier.fillMaxSize()
     ) {
 
         AppTopBar(
@@ -243,16 +240,18 @@ fun ChatScreen(
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 20.dp,
-                    vertical = 8.dp
-                )
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 20.dp,
+                        vertical = 8.dp
+                    )
         ) {
 
-           Row(
-                modifier = Modifier.fillMaxWidth(),
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth(),
                 horizontalArrangement =
                     Arrangement.SpaceBetween,
                 verticalAlignment =
@@ -289,29 +288,31 @@ fun ChatScreen(
 
                 Text(
                     text =
-            when (aiEngineStatus) {
-                AIEngineStatus.IDLE ->
-                    "AI idle"
+                        when (aiEngineStatus) {
 
-                AIEngineStatus.LOADING ->
-                    "Loading AI..."
+                            AIEngineStatus.IDLE ->
+                                "AI idle"
 
-                AIEngineStatus.READY ->
-                    "AI ready"
+                            AIEngineStatus.LOADING ->
+                                "Loading AI..."
 
-                AIEngineStatus.GENERATING ->
-                    "AI thinking..."
+                            AIEngineStatus.READY ->
+                                "AI ready"
 
-                AIEngineStatus.STOPPING ->
-                    "Stopping..."
+                            AIEngineStatus.GENERATING ->
+                                "AI thinking..."
 
-                AIEngineStatus.ERROR ->
-                    "AI error"
-            },
+                            AIEngineStatus.STOPPING ->
+                                "Stopping..."
+
+                            AIEngineStatus.ERROR ->
+                                "AI error"
+                        },
                     style =
                         MaterialTheme.typography.bodySmall,
                     color =
                         when (aiEngineStatus) {
+
                             AIEngineStatus.ERROR ->
                                 MaterialTheme.colorScheme.error
 
@@ -324,22 +325,24 @@ fun ChatScreen(
                                 Color(0xFF68736D)
                         }
                 )
-            } 
+            }
         }
 
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
         ) {
 
             LazyColumn(
                 state = chatListState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        horizontal = 20.dp
-                    ),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(
+                            horizontal = 20.dp
+                        ),
                 verticalArrangement =
                     Arrangement.spacedBy(12.dp),
                 contentPadding =
@@ -409,7 +412,8 @@ fun ChatScreen(
         isGenerating &&
             !chatMessage.isUser &&
             chatMessage.id ==
-            messages.lastOrNull()?.id,
+                messages.lastOrNull()?.id &&
+            chatMessage.text.isBlank(),
     onCopy = {
 
         clipboardManager.setText(
@@ -422,7 +426,7 @@ fun ChatScreen(
             context,
             "Copied to clipboard",
             Toast.LENGTH_SHORT
-        ).show()  
+        ).show()
     },
     onRetry = {
         onRetry(chatMessage)
@@ -444,25 +448,32 @@ fun ChatScreen(
                     localScrollDistance >
                     viewportHeight.toFloat()
 
-            if (
-                !isGenerating &&
-                showScrollToBottom
-            ) {
+            if (isGenerating) {
 
-                ScrollToBottomButton(
+                ThinkingDots(
+                    modifier =
+                        Modifier
+                            .align(
+                                Alignment.BottomCenter
+                            )
+                            .padding(
+                                bottom = 12.dp
+                            )
+                )
+
+            } else if (showScrollToBottom) {
+
+                ChatScrollToBottomButton(
                     onClick = {
 
                         scrollScope.launch {
 
-                            if (
-                                messages.isNotEmpty()
-                            ) {
-
-                                chatListState
-                                    .animateScrollToItem(
-                                        messages.lastIndex
-                                    )
-                            }
+                            scrollToLatestAiResponse(
+                                listState =
+                                    chatListState,
+                                messages =
+                                    messages
+                            )
 
                             localScrollDistance = 0f
 
@@ -483,20 +494,21 @@ fun ChatScreen(
             }
         }
 
-       ChatInput(
+        ChatInput(
             value = message,
             onValueChange =
                 onMessageChange,
             onSend = onSend,
             onStop = onStop,
-            onLimitReached = onSessionLimitReached,
+            onLimitReached =
+                onSessionLimitReached,
             isGenerating =
                 isGenerating,
             enabled =
                 responseCount < 50
-            ) 
-        }
+        )
     }
+}
 
 @Composable
 private fun ChatMessageCard(
@@ -551,44 +563,72 @@ private fun ChatMessageCard(
                     Modifier.height(6.dp)
             )
 
+            if (message.isUser) {
+
+    Text(
+        text = message.text,
+        style =
+            MaterialTheme.typography.bodyLarge,
+        color =
+            Color(0xFF101110)
+    )
+
+} else if (
+    isGenerating &&
+        message.text.isBlank()
+) {
+
+    ChatResponseShimmer()
+
+} else {
+
+    ChatMessageRenderer(
+        text = message.text
+    )
+}
+
             if (
-                isGenerating &&
-                !message.isUser &&
-                message.text.isBlank()
+                message.isUser &&
+                message.text.isNotBlank()
             ) {
 
-                ThinkingDots(
+                Spacer(
                     modifier =
-                        Modifier.padding(
-                            vertical = 4.dp
-                        )
+                        Modifier.height(4.dp)
                 )
 
-            } else {
-
-               if (message.isUser) {
-                    Text(
-                        text = message.text,
-                        style =
-                        MaterialTheme.typography.bodyLarge,
-                        color =
-                        Color(0xFF101110)
-                    )
-                } else {
-                    ChatMessageRenderer(
-                        text = message.text
-                    )
-                } 
-
-               if (
-                    message.isUser &&
-                    message.text.isNotBlank()
+                IconButton(
+                    onClick = onCopy,
+                    modifier =
+                        Modifier.size(34.dp)
                 ) {
 
-                    Spacer(
+                    Icon(
+                        imageVector =
+                            Icons.Default.ContentCopy,
+                        contentDescription =
+                            "Copy prompt",
+                        tint =
+                            Color(0xFF4CAF50),
                         modifier =
-                            Modifier.height(4.dp)
+                            Modifier.size(18.dp)
                     )
+                }
+
+            } else if (
+                !message.isUser &&
+                message.text.isNotBlank()
+            ) {
+
+                Spacer(
+                    modifier =
+                        Modifier.height(4.dp)
+                )
+
+                Row(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(2.dp)
+                ) {
 
                     IconButton(
                         onClick = onCopy,
@@ -600,7 +640,7 @@ private fun ChatMessageCard(
                             imageVector =
                                 Icons.Default.ContentCopy,
                             contentDescription =
-                                "Copy prompt",
+                                "Copy response",
                             tint =
                                 Color(0xFF4CAF50),
                             modifier =
@@ -608,110 +648,25 @@ private fun ChatMessageCard(
                         )
                     }
 
-                } else if (
-                    !message.isUser &&
-                    message.text.isNotBlank()
-                ) {
-
-                    Spacer(
+                    IconButton(
+                        onClick = onRetry,
                         modifier =
-                            Modifier.height(4.dp)
-                    )
-
-                    Row(
-                        horizontalArrangement =
-                            Arrangement.spacedBy(2.dp)
+                            Modifier.size(34.dp)
                     ) {
 
-                        IconButton(
-                            onClick = onCopy,
+                        Icon(
+                            imageVector =
+                                Icons.Default.Refresh,
+                            contentDescription =
+                                "Regenerate response",
+                            tint =
+                                MaterialTheme.colorScheme.primary,
                             modifier =
-                                Modifier.size(34.dp)
-                        ) {
-
-                            Icon(
-                                imageVector =
-                                    Icons.Default.ContentCopy,
-                                contentDescription =
-                                    "Copy response",
-                                tint =
-                                    Color(0xFF4CAF50),
-                                modifier =
-                                    Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = onRetry,
-                            modifier =
-                                Modifier.size(34.dp)
-                        ) {
-
-                            Icon(
-                                imageVector =
-                                    Icons.Default.Refresh,
-                                contentDescription =
-                                    "Regenerate response",
-                                tint =
-                                    MaterialTheme.colorScheme.primary,
-                                modifier =
-                                    Modifier.size(20.dp)
-                            )
-                        }
+                                Modifier.size(20.dp)
+                        )
                     }
-                } 
-
+                }
             }
-        }
-    }
-}
-
-@Composable
-private fun ScrollToBottomButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-
-    Surface(
-        onClick = onClick,
-        modifier =
-            modifier
-                .size(46.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = CircleShape
-                ),
-        shape = CircleShape,
-        color =
-            Color.White.copy(alpha = 0.92f),
-        tonalElevation = 4.dp,
-        border =
-            BorderStroke(
-                width = 1.dp,
-                color =
-                    Color.White.copy(
-                        alpha = 0.75f
-                    )
-            )
-    ) {
-
-        Box(
-            modifier =
-                Modifier.fillMaxSize(),
-            contentAlignment =
-                Alignment.Center
-        ) {
-
-            Icon(
-                imageVector =
-                    Icons.Default.ArrowDownward,
-                contentDescription =
-                    "Go to latest message",
-                tint =
-                    MaterialTheme.colorScheme.primary,
-                modifier =
-                    Modifier.size(22.dp)
-            )
         }
     }
 }
@@ -918,6 +873,7 @@ private fun ChatInput(
                     Text(
                         text =
                             when {
+
                                 isGenerating ->
                                     "AI is thinking..."
 
@@ -936,11 +892,13 @@ private fun ChatInput(
                         !isGenerating,
                 keyboardOptions =
                     KeyboardOptions(
-                        imeAction = ImeAction.Default
+                        imeAction =
+                            ImeAction.Default
                     ),
                 keyboardActions =
                     KeyboardActions(
                         onDone = {
+
                             if (
                                 enabled &&
                                     !isGenerating &&
@@ -1018,145 +976,4 @@ private fun ChatInput(
             }
         }
     }
-}
-
-@Composable
-private fun ThinkingDots(
-    modifier: Modifier = Modifier
-) {
-
-    val infiniteTransition =
-        rememberInfiniteTransition(
-            label = "thinkingDots"
-        )
-
-    val dotOneAlpha by
-        infiniteTransition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation =
-                        tween(
-                            durationMillis = 450,
-                            easing =
-                                FastOutSlowInEasing
-                        ),
-                    repeatMode =
-                        RepeatMode.Reverse
-                ),
-            label = "dotOne"
-        )
-
-    val dotTwoAlpha by
-        infiniteTransition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation =
-                        tween(
-                            durationMillis = 450,
-                            delayMillis = 150,
-                            easing =
-                                FastOutSlowInEasing
-                        ),
-                    repeatMode =
-                        RepeatMode.Reverse
-                ),
-            label = "dotTwo"
-        )
-
-    val dotThreeAlpha by
-        infiniteTransition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation =
-                        tween(
-                            durationMillis = 450,
-                            delayMillis = 300,
-                            easing =
-                                FastOutSlowInEasing
-                        ),
-                    repeatMode =
-                        RepeatMode.Reverse
-                ),
-            label = "dotThree"
-        )
-
-    Surface(
-        modifier =
-            modifier
-                .size(
-                    width = 74.dp,
-                    height = 42.dp
-                )
-                .shadow(
-                    elevation = 8.dp,
-                    shape = CircleShape
-                ),
-        shape = CircleShape,
-        color =
-            Color.White.copy(alpha = 0.92f),
-        tonalElevation = 4.dp,
-        border =
-            BorderStroke(
-                width = 1.dp,
-                color =
-                    Color.White.copy(
-                        alpha = 0.75f
-                    )
-            )
-    ) {
-
-        Row(
-            modifier =
-                Modifier.fillMaxSize(),
-            horizontalArrangement =
-                Arrangement.Center,
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            ThinkingDot(
-                alpha = dotOneAlpha
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.width(5.dp)
-            )
-
-            ThinkingDot(
-                alpha = dotTwoAlpha
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.width(5.dp)
-            )
-
-            ThinkingDot(
-                alpha = dotThreeAlpha
-            )
-        }
-    }
-}
-
-@Composable
-private fun ThinkingDot(
-    alpha: Float
-) {
-
-    Surface(
-        modifier =
-            Modifier.size(7.dp),
-        shape = CircleShape,
-        color =
-            Color(0xFF68736D).copy(
-                alpha = alpha
-            )
-    ) {}
 }
