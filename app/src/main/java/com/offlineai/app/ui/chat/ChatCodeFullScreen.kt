@@ -1,5 +1,7 @@
 package com.offlineai.app.ui.chat
 
+import android.graphics.Color as AndroidColor
+import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
@@ -19,16 +19,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun ChatCodeFullScreen(
@@ -52,6 +54,11 @@ fun ChatCodeFullScreen(
             }
         }
 
+    val rendererHolder =
+        remember {
+            arrayOfNulls<ChatFullScreenWebRenderer>(1)
+        }
+
     Dialog(
         onDismissRequest = onBack,
         properties =
@@ -62,12 +69,12 @@ fun ChatCodeFullScreen(
                 decorFitsSystemWindows = false
             )
     ) {
+
         Surface(
             modifier =
-                Modifier.fillMaxSize(),
-            color =
-                Color(0xFFF4F8F5)
+                Modifier.fillMaxSize()
         ) {
+
             Column(
                 modifier =
                     Modifier.fillMaxSize()
@@ -78,7 +85,13 @@ fun ChatCodeFullScreen(
                         Modifier
                             .fillMaxWidth()
                             .background(
-                                Color(0xFFE7ECE9)
+                                androidx.compose.ui.graphics.Color(
+                                    AndroidColor.rgb(
+                                        231,
+                                        236,
+                                        233
+                                    )
+                                )
                             )
                             .padding(
                                 horizontal = 8.dp,
@@ -111,12 +124,11 @@ fun ChatCodeFullScreen(
 
                     IconButton(
                         onClick = {
-                            clipboardManager
-                                .setText(
-                                    AnnotatedString(
-                                        code
-                                    )
+                            clipboardManager.setText(
+                                AnnotatedString(
+                                    code
                                 )
+                            )
                         }
                     ) {
                         Icon(
@@ -133,26 +145,49 @@ fun ChatCodeFullScreen(
                         Modifier
                             .fillMaxSize()
                             .background(
-                                Color(0xFFEAF4ED)
+                                androidx.compose.ui.graphics.Color(
+                                    AndroidColor.TRANSPARENT
+                                )
                             )
-                            .verticalScroll(
-                                rememberScrollState()
-                            )
-                            .padding(20.dp)
                 ) {
-                    Text(
-                        text = code,
-                        color =
-                            Color(0xFF172019),
-                        fontFamily =
-                            FontFamily.Monospace,
-                        style =
-                            MaterialTheme
-                                .typography
-                                .bodyLarge
+
+                    AndroidView(
+                        modifier =
+                            Modifier.fillMaxSize(),
+
+                        factory = { context ->
+
+                            WebView(context).apply {
+
+                                setBackgroundColor(
+                                    AndroidColor.TRANSPARENT
+                                )
+
+                                rendererHolder[0] =
+                                    ChatFullScreenWebRenderer(
+                                        webView = this
+                                    )
+                            }
+                        },
+
+                        update = {
+
+                            rendererHolder[0]?.render(
+                                language = language,
+                                code = code
+                            )
+                        }
                     )
                 }
             }
+        }
+    }
+
+    DisposableEffect(Unit) {
+
+        onDispose {
+
+            rendererHolder[0] = null
         }
     }
 }

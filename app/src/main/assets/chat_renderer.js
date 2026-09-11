@@ -543,9 +543,8 @@ function renderResponse(
         }
     );
 
-    renderMath(
-        content
-    );
+    renderMath(content);
+    fitChatMath(content);
 }
 
 
