@@ -64,6 +64,8 @@ import com.offlineai.app.ui.subjects.SubjectSelectionScreen
 import com.offlineai.app.ui.subjects.StudyContentEditScreen
 import com.offlineai.app.ui.subjects.SubjectsScreen
 
+import com.offlineai.app.permissions.rememberCameraPermissionController
+
 import com.offlineai.app.ai.ChatGenerationConfig
 import com.offlineai.app.ai.ChatGenerationService
 import com.offlineai.app.ai.AIEngineManager
@@ -101,6 +103,14 @@ fun AppNavigation() {
     var currentScreen by remember {
         mutableStateOf(AppScreen.CHAT)
     }
+
+    val cameraPermissionController =
+        rememberCameraPermissionController(
+            context = context,
+            onGranted = {
+                currentScreen = AppScreen.CAMERA
+            }
+    )
 
     val chatMessages = remember {
         mutableStateListOf<ChatMessage>()
@@ -736,7 +746,9 @@ fun AppNavigation() {
                         }
                     },
                     onTakePhoto = {
-                        currentScreen = AppScreen.CAMERA
+                        cameraPermissionController.request{
+                            currentScreen = AppScreen.CAMERA
+                        }
                     },
                     onContinue = {
                         startImport(it)
