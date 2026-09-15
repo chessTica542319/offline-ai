@@ -3,7 +3,6 @@ package com.offlineai.app.ui.chat
 import android.widget.Toast
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,16 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Stop
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,27 +31,29 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Scaffold
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.derivedStateOf
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
 import com.offlineai.app.ai.AIEngineStatus
@@ -103,6 +99,48 @@ fun ChatScreen(
         )
     }
 
+    var chatInputReservedHeight by remember {
+        mutableIntStateOf(0)
+    }
+
+    val density =
+        LocalDensity.current
+
+    val viewportHeight =
+        chatListState.layoutInfo.viewportEndOffset -
+            chatListState.layoutInfo.viewportStartOffset
+
+    val latestResponseIsAway by remember {
+        derivedStateOf {
+            val latestResponse =
+                messages.lastOrNull {
+                    !it.isUser
+                }
+
+            if (latestResponse == null) {
+                false
+            } else {
+                val latestItem =
+                    chatListState.layoutInfo.visibleItemsInfo.firstOrNull {
+                        it.key == latestResponse.id
+                    }
+
+                if (latestItem == null) {
+                    true
+                } else {
+                    val viewportStart =
+                        chatListState.layoutInfo.viewportStartOffset
+
+                    val viewportEnd =
+                        chatListState.layoutInfo.viewportEndOffset
+
+                    latestItem.offset < viewportStart ||
+                        latestItem.offset + latestItem.size > viewportEnd
+                }
+            }
+        }
+    }
+
     LaunchedEffect(
         scrollDistanceFromBottom
     ) {
@@ -134,16 +172,19 @@ fun ChatScreen(
                 position.second
 
             val indexDelta =
-                currentIndex - previousIndex
+                currentIndex -
+                    previousIndex
 
             val offsetDelta =
-                currentOffset - previousOffset
+                currentOffset -
+                    previousOffset
 
             val newDistance =
                 if (indexDelta != 0) {
 
                     val estimatedItemSize =
-                        chatListState.layoutInfo
+                        chatListState
+                            .layoutInfo
                             .visibleItemsInfo
                             .map {
                                 it.size
@@ -163,7 +204,8 @@ fun ChatScreen(
                             (
                                 indexDelta *
                                     estimatedItemSize
-                            ) + offsetDelta
+                            ) +
+                                offsetDelta
                         )
 
                 } else {
@@ -204,7 +246,8 @@ fun ChatScreen(
                 messages.lastIndex
             )
 
-            localScrollDistance = 0f
+            localScrollDistance =
+                0f
 
             onScrollDistanceChange(
                 0f
@@ -221,7 +264,8 @@ fun ChatScreen(
             !chatListState.canScrollForward
         ) {
 
-            localScrollDistance = 0f
+            localScrollDistance =
+                0f
 
             onScrollDistanceChange(
                 0f
@@ -229,285 +273,354 @@ fun ChatScreen(
         }
     }
 
-    Column(
+    Scaffold(
         modifier =
-            Modifier.fillMaxSize()
-    ) {
+            Modifier.fillMaxSize(),
 
-        AppTopBar(
-            title = "Offline AI",
-            onOpenDrawer = onOpenDrawer
-        )
+        bottomBar = {
+
+            FloatingChatInput(
+                value = message,
+
+                onValueChange =
+                    onMessageChange,
+
+                onSend =
+                    onSend,
+
+                onStop =
+                    onStop,
+
+                onPlus = {
+                    // Plus action will be implemented next.
+                },
+
+                onLimitReached =
+                    onSessionLimitReached,
+
+                onScrollToBottom = {
+
+                    scrollScope.launch {
+
+                        scrollToLatestAiResponse(
+                            listState =
+                                chatListState,
+                            messages =
+                                messages
+                        )
+
+                        localScrollDistance =
+                            0f
+
+                        onScrollDistanceChange(
+                            0f
+                        )
+                    }
+                },
+
+                isGenerating =
+                    isGenerating,
+
+                enabled =
+                    responseCount < 50,
+
+               showScrollToBottom =
+                    latestResponseIsAway &&
+                    messages.isNotEmpty(), 
+
+                onHeightChanged = {
+                    chatInputReservedHeight =
+                        it
+                }
+            )
+        }
+
+    )
+
+{ scaffoldPadding ->
 
         Column(
             modifier =
                 Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(
-                        horizontal = 20.dp,
-                        vertical = 8.dp
+                        scaffoldPadding
                     )
         ) {
 
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.SpaceBetween,
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
+            AppTopBar(
+                title =
+                    "Offline AI",
 
-                Column {
+                onOpenDrawer =
+                    onOpenDrawer
+            )
 
-                    Text(
-                        text =
-                            "Responses this session: " +
-                                "$responseCount / 50",
-                        style =
-                            MaterialTheme.typography.bodySmall,
-                        color =
-                            Color(0xFF68736D)
-                    )
-
-                    TextButton(
-                        onClick = {
-                            onResetSession()
-                        },
-                        contentPadding =
-                            PaddingValues(0.dp)
-                    ) {
-
-                        Text(
-                            text = "Reset session",
-                            style =
-                                MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-
-                Text(
-                    text =
-                        when (aiEngineStatus) {
-
-                            AIEngineStatus.IDLE ->
-                                "AI idle"
-
-                            AIEngineStatus.LOADING ->
-                                "Loading AI..."
-
-                            AIEngineStatus.READY ->
-                                "AI ready"
-
-                            AIEngineStatus.GENERATING ->
-                                "AI thinking..."
-
-                            AIEngineStatus.STOPPING ->
-                                "Stopping..."
-
-                            AIEngineStatus.ERROR ->
-                                "AI error"
-                        },
-                    style =
-                        MaterialTheme.typography.bodySmall,
-                    color =
-                        when (aiEngineStatus) {
-
-                            AIEngineStatus.ERROR ->
-                                MaterialTheme.colorScheme.error
-
-                            AIEngineStatus.GENERATING,
-                            AIEngineStatus.LOADING,
-                            AIEngineStatus.STOPPING ->
-                                MaterialTheme.colorScheme.primary
-
-                            else ->
-                                Color(0xFF68736D)
-                        }
-                )
-            }
-        }
-
-        Box(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-        ) {
-
-            LazyColumn(
-                state = chatListState,
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .padding(
-                            horizontal = 20.dp
-                        ),
-                verticalArrangement =
-                    Arrangement.spacedBy(12.dp),
-                contentPadding =
-                    PaddingValues(
-                        top = 16.dp,
-                        bottom = 24.dp
-                    )
+                            horizontal = 20.dp,
+                            vertical = 8.dp
+                        )
             ) {
 
-                item {
+                Row(
+                    modifier =
+                        Modifier.fillMaxWidth(),
 
-                    Text(
-                        text = "Welcome! 👋",
-                        style =
-                            MaterialTheme.typography
-                                .headlineMedium,
-                        color =
-                            Color(0xFF101110)
-                    )
+                    horizontalArrangement =
+                        Arrangement.SpaceBetween,
 
-                    Spacer(
-                        modifier =
-                            Modifier.height(8.dp)
-                    )
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+
+                    Column {
+
+                        Text(
+                            text =
+                                "Responses this session: " +
+                                    "$responseCount / 50",
+
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .bodySmall,
+
+                            color =
+                                Color(0xFF68736D)
+                        )
+
+                        TextButton(
+                            onClick = {
+                                onResetSession()
+                            },
+
+                            contentPadding =
+                                PaddingValues(
+                                    0.dp
+                                )
+                        ) {
+
+                            Text(
+                                text =
+                                    "Reset session",
+
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .bodySmall
+                            )
+                        }
+                    }
 
                     Text(
                         text =
-                            "Ask me about your study materials.",
+                            when (
+                                aiEngineStatus
+                            ) {
+
+                                AIEngineStatus.IDLE ->
+                                    "AI idle"
+
+                                AIEngineStatus.LOADING ->
+                                    "Loading AI..."
+
+                                AIEngineStatus.READY ->
+                                    "AI ready"
+
+                                AIEngineStatus.GENERATING ->
+                                    "AI thinking..."
+
+                                AIEngineStatus.STOPPING ->
+                                    "Stopping..."
+
+                                AIEngineStatus.ERROR ->
+                                    "AI error"
+                            },
+
                         style =
-                            MaterialTheme.typography.bodyLarge,
+                            MaterialTheme
+                                .typography
+                                .bodySmall,
+
                         color =
-                            Color(0xFF68736D)
+                            when (
+                                aiEngineStatus
+                            ) {
+
+                                AIEngineStatus.ERROR ->
+                                    MaterialTheme
+                                        .colorScheme
+                                        .error
+
+                                AIEngineStatus.GENERATING,
+                                AIEngineStatus.LOADING,
+                                AIEngineStatus.STOPPING ->
+                                    MaterialTheme
+                                        .colorScheme
+                                        .primary
+
+                                else ->
+                                    Color(0xFF68736D)
+                            }
                     )
                 }
-
-                if (messages.isEmpty()) {
-
-                    item {
-
-                        ImportLessonCard(
-                            knowledgeStats =
-                                knowledgeStats,
-                            onImportFiles =
-                                onImportFiles
-                        )
-                    }
-
-                    item {
-
-                        KnowledgeCard(
-                            knowledgeStats =
-                                knowledgeStats
-                        )
-                    }
-                }
-
-                items(
-                    items = messages,
-                    key = {
-                        it.id
-                    }
-                ) { chatMessage ->
-
-                   ChatMessageCard(
-    message = chatMessage,
-    isGenerating =
-        isGenerating &&
-            !chatMessage.isUser &&
-            chatMessage.id ==
-                messages.lastOrNull()?.id &&
-            chatMessage.text.isBlank(),
-    onCopy = {
-
-        clipboardManager.setText(
-            AnnotatedString(
-                chatMessage.text
-            )
-        )
-
-        Toast.makeText(
-            context,
-            "Copied to clipboard",
-            Toast.LENGTH_SHORT
-        ).show()
-    },
-    onRetry = {
-        onRetry(chatMessage)
-    }
-) 
-                }
             }
 
-            val viewportHeight =
-                chatListState.layoutInfo
-                    .viewportEndOffset -
-                    chatListState.layoutInfo
-                        .viewportStartOffset
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+            ) {
 
-            val showScrollToBottom =
-                !isGenerating &&
-                    messages.isNotEmpty() &&
-                    chatListState.canScrollForward &&
-                    localScrollDistance >
-                    viewportHeight.toFloat()
+                LazyColumn(
+                    state =
+                        chatListState,
 
-            if (isGenerating) {
-
-                ThinkingDots(
                     modifier =
                         Modifier
-                            .align(
-                                Alignment.BottomCenter
-                            )
+                            .fillMaxSize()
                             .padding(
-                                bottom = 12.dp
-                            )
-                )
+                                horizontal = 20.dp
+                            ),
 
-            } else if (showScrollToBottom) {
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            12.dp
+                        ),
 
-                ChatScrollToBottomButton(
-                    onClick = {
+                    contentPadding =
+                        PaddingValues(
+                            top = 16.dp,
 
-                        scrollScope.launch {
+                            bottom =
+                                24.dp +
+                                    with(density) {
+                                        chatInputReservedHeight
+                                            .toDp()
+                                    }
+                        )
+                ) {
 
-                            scrollToLatestAiResponse(
-                                listState =
-                                    chatListState,
-                                messages =
-                                    messages
-                            )
+                    item {
 
-                            localScrollDistance = 0f
+                        Text(
+                            text =
+                                "Welcome! 👋",
 
-                            onScrollDistanceChange(
-                                0f
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .headlineMedium,
+
+                            color =
+                                Color(0xFF101110)
+                        )
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(
+                                    8.dp
+                                )
+                        )
+
+                        Text(
+                            text =
+                                "Ask me about your study materials.",
+
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .bodyLarge,
+
+                            color =
+                                Color(0xFF68736D)
+                        )
+                    }
+
+                    if (
+                        messages.isEmpty()
+                    ) {
+
+                        item {
+
+                            ImportLessonCard(
+                                knowledgeStats =
+                                    knowledgeStats,
+
+                                onImportFiles =
+                                    onImportFiles
                             )
                         }
-                    },
-                    modifier =
-                        Modifier
-                            .align(
-                                Alignment.BottomCenter
+
+                        item {
+
+                            KnowledgeCard(
+                                knowledgeStats =
+                                    knowledgeStats
                             )
-                            .padding(
-                                bottom = 12.dp
-                            )
-                )
+                        }
+                    }
+
+                    items(
+                        items =
+                            messages,
+
+                        key = {
+                            it.id
+                        }
+
+                    ) { chatMessage ->
+
+                        ChatMessageCard(
+                            message =
+                                chatMessage,
+
+                            isGenerating =
+                                isGenerating &&
+                                    !chatMessage.isUser &&
+                                    chatMessage.id ==
+                                        messages
+                                            .lastOrNull()
+                                            ?.id &&
+                                    chatMessage.text.isBlank(),
+
+                            onCopy = {
+
+                                clipboardManager.setText(
+                                    AnnotatedString(
+                                        chatMessage.text
+                                    )
+                                )
+
+                                Toast.makeText(
+                                    context,
+                                    "Copied to clipboard",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+
+                            onRetry =  {
+                                onRetry(chatMessage)
+                            }
+                        )
+                    }
+
+                    item(
+                        key = "chat_disclaimer"
+                        ) {
+                            ChatDisclaimer()
+                        }
+
+                }
             }
         }
-
-        ChatInput(
-            value = message,
-            onValueChange =
-                onMessageChange,
-            onSend = onSend,
-            onStop = onStop,
-            onLimitReached =
-                onSessionLimitReached,
-            isGenerating =
-                isGenerating,
-            enabled =
-                responseCount < 50
-        )
     }
+
 }
 
 @Composable
@@ -834,146 +947,3 @@ private fun KnowledgeCard(
     }
 }
 
-@Composable
-private fun ChatInput(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onStop: () -> Unit,
-    onLimitReached: () -> Unit,
-    isGenerating: Boolean,
-    enabled: Boolean
-) {
-
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 12.dp,
-                    end = 12.dp,
-                    bottom = 12.dp
-                )
-    ) {
-
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(end = 56.dp)
-        ) {
-
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier =
-                    Modifier.fillMaxWidth(),
-                placeholder = {
-
-                    Text(
-                        text =
-                            when {
-
-                                isGenerating ->
-                                    "AI is thinking..."
-
-                                !enabled ->
-                                    "Session response limit reached"
-
-                                else ->
-                                    "Ask anything..."
-                            }
-                    )
-                },
-                minLines = 1,
-                maxLines = 5,
-                enabled =
-                    enabled &&
-                        !isGenerating,
-                keyboardOptions =
-                    KeyboardOptions(
-                        imeAction =
-                            ImeAction.Default
-                    ),
-                keyboardActions =
-                    KeyboardActions(
-                        onDone = {
-
-                            if (
-                                enabled &&
-                                    !isGenerating &&
-                                value.isNotBlank()
-                            ) {
-                                onSend()
-                            }
-                        }
-                    )
-            )
-
-            if (
-                !enabled &&
-                !isGenerating
-            ) {
-
-                Box(
-                    modifier =
-                        Modifier
-                            .matchParentSize()
-                            .clickable {
-                                onLimitReached()
-                            }
-                )
-            }
-        }
-
-        IconButton(
-            onClick = {
-
-                if (isGenerating) {
-                    onStop()
-                } else {
-                    onSend()
-                }
-            },
-            enabled =
-                if (isGenerating) {
-                    true
-                } else {
-                    enabled &&
-                        value.isNotBlank()
-                },
-            modifier =
-                Modifier.align(
-                    Alignment.CenterEnd
-                )
-        ) {
-
-            if (isGenerating) {
-
-                Icon(
-                    imageVector =
-                        Icons.Default.Stop,
-                    contentDescription =
-                        "Stop response",
-                    tint =
-                        MaterialTheme.colorScheme.error
-                )
-
-            } else {
-
-                Icon(
-                    imageVector =
-                        Icons.Default.Send,
-                    contentDescription =
-                        "Send",
-                    tint =
-                        if (value.isBlank()) {
-                            Color(0xFFB8C0BB)
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
-                )
-            }
-        }
-    }
-}

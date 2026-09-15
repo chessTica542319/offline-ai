@@ -71,3 +71,6 @@ app/src/main/assets/models/*.gguf
 
 .cxx/
 .externalNativeBuild/
+
+#file debugger
+Find_Braces.py

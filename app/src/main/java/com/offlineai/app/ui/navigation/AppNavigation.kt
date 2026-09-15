@@ -71,6 +71,7 @@ import com.offlineai.app.ai.ChatGenerationService
 import com.offlineai.app.ai.AIEngineManager
 import com.offlineai.app.ai.SessionMemory
 import com.offlineai.app.ai.resetChatSession
+import com.offlineai.app.ai.ChatGenerationStopController
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -240,21 +241,27 @@ fun AppNavigation() {
         KnowledgeContextBuilder
     }
 
-   val chatGenerationService = remember(
-        chunkKnowledgeSearch,
-        repository,
-        chunkKnowledgeContextBuilder,
-        aiEngineManager,
-        sessionMemory,
-        chatGenerationConfig
-    ) {
-        ChatGenerationService(
-            chunkKnowledgeSearch = chunkKnowledgeSearch,
-            studyRepository = repository,
-            chunkKnowledgeContextBuilder = chunkKnowledgeContextBuilder,
-            aiEngineManager = aiEngineManager,
-            sessionMemory = sessionMemory,
-            config = chatGenerationConfig
+    val chatGenerationStopController = remember {
+        ChatGenerationStopController()
+    }
+
+    val chatGenerationService = remember(
+    chunkKnowledgeSearch,
+    repository,
+    chunkKnowledgeContextBuilder,
+    aiEngineManager,
+    sessionMemory,
+    chatGenerationConfig,
+    chatGenerationStopController
+        ) {
+    ChatGenerationService(
+        chunkKnowledgeSearch = chunkKnowledgeSearch,
+        studyRepository = repository,
+        chunkKnowledgeContextBuilder = chunkKnowledgeContextBuilder,
+        aiEngineManager = aiEngineManager,
+        sessionMemory = sessionMemory,
+        config = chatGenerationConfig,
+        stopController = chatGenerationStopController
         )
     } 
 
@@ -429,6 +436,7 @@ fun AppNavigation() {
 
    fun stopChatGeneration() {
         if (chatIsGenerating) {
+            chatGenerationStopController.requestStop()
             aiEngineManager.stopGeneration()
         }
     }
@@ -464,6 +472,7 @@ fun AppNavigation() {
             prompt = prompt
         )
 
+    chatGenerationStopController.reset()
     chatIsGenerating = true
     chatScrollDistanceFromBottom = 0f
 
@@ -580,6 +589,7 @@ fun AppNavigation() {
             )
         )
 
+        chatGenerationStopController.reset()
         chatIsGenerating = true
         chatScrollDistanceFromBottom = 0f
         chatResponseCount++

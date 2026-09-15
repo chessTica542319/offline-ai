@@ -12,7 +12,8 @@ class ChatGenerationService(
     private val chunkKnowledgeContextBuilder: ChunkKnowledgeContextBuilder,
     private val aiEngineManager: AIEngineManager,
     private val sessionMemory: SessionMemory,
-    private val config: ChatGenerationConfig
+    private val config: ChatGenerationConfig,
+    private val stopController: ChatGenerationStopController
 ) {
 
     suspend fun generate(
@@ -25,6 +26,10 @@ class ChatGenerationService(
             return "Error: question is empty."
         }
 
+        if (stopController.isStopRequested()) {
+            return "__STOPPED__"
+        }
+
         return runCatching {
 
             val chunks =
@@ -34,6 +39,10 @@ class ChatGenerationService(
                         limit = config.maxRetrievedContents
                     )
                 }
+
+            if (stopController.isStopRequested()) {
+                return@runCatching "__STOPPED__"
+            }
 
             val contents =
                 withContext(Dispatchers.IO) {
@@ -49,11 +58,19 @@ class ChatGenerationService(
                         }
                 }
 
+            if (stopController.isStopRequested()) {
+                return@runCatching "__STOPPED__"
+            }
+
             val knowledgeContext =
                 chunkKnowledgeContextBuilder.build(
                     chunks = chunks,
                     contents = contents
                 )
+
+            if (stopController.isStopRequested()) {
+                return@runCatching "__STOPPED__"
+            }
 
             val sessionContext =
                 sessionMemory.buildContext()
@@ -93,6 +110,11 @@ class ChatGenerationService(
                 <|im_end|>
                 <|im_start|>assistant
             """.trimIndent()
+
+
+            if (stopController.isStopRequested()) {
+                return@runCatching "__STOPPED__"
+            }
 
             aiEngineManager.generate(
                 prompt = aiPrompt,
