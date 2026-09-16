@@ -365,80 +365,12 @@ fun ChatScreen(
                         )
             ) {
 
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween,
-
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-
-                    Column {
-
-                        Text(
-                            text =
-                                "Responses this session: " +
-                                    "$responseCount / 50",
-
-                            style =
-                                MaterialTheme
-                                    .typography
-                                    .bodySmall,
-
-                            color =
-                                Color(0xFF68736D)
-                        )
-
-                        TextButton(
-                            onClick = {
-                                onResetSession()
-                            },
-
-                            contentPadding =
-                                PaddingValues(
-                                    0.dp
-                                )
-                        ) {
-
-                            Text(
-                                text =
-                                    "Reset session",
-
-                                style =
-                                    MaterialTheme
-                                        .typography
-                                        .bodySmall
-                            )
-                        }
-                    }
+               Column {
 
                     Text(
                         text =
-                            when (
-                                aiEngineStatus
-                            ) {
-
-                                AIEngineStatus.IDLE ->
-                                    "AI idle"
-
-                                AIEngineStatus.LOADING ->
-                                    "Loading AI..."
-
-                                AIEngineStatus.READY ->
-                                    "AI ready"
-
-                                AIEngineStatus.GENERATING ->
-                                    "AI thinking..."
-
-                                AIEngineStatus.STOPPING ->
-                                    "Stopping..."
-
-                                AIEngineStatus.ERROR ->
-                                    "AI error"
-                            },
+                            "Responses this session: " +
+                                "$responseCount / 50",
 
                         style =
                             MaterialTheme
@@ -446,27 +378,36 @@ fun ChatScreen(
                                 .bodySmall,
 
                         color =
-                            when (
-                                aiEngineStatus
-                            ) {
-
-                                AIEngineStatus.ERROR ->
-                                    MaterialTheme
-                                        .colorScheme
-                                        .error
-
-                                AIEngineStatus.GENERATING,
-                                AIEngineStatus.LOADING,
-                                AIEngineStatus.STOPPING ->
-                                    MaterialTheme
-                                        .colorScheme
-                                        .primary
-
-                                else ->
-                                    Color(0xFF68736D)
-                            }
+                            Color(0xFF68736D)
                     )
+
+                    TextButton(
+                        onClick = {
+                            onResetSession()
+                        },
+
+                        contentPadding =
+                            PaddingValues(
+                                0.dp
+                            )
+                    ) {
+
+                        Text(
+                            text =
+                                "Reset session",
+
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .bodySmall
+                        )
+                    }
                 }
+
+                AIStatusText(
+                    status =
+                        aiEngineStatus
+                )
             }
 
             Box(
