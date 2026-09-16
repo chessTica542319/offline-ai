@@ -58,7 +58,6 @@ import androidx.compose.ui.unit.dp
 
 import com.offlineai.app.ai.AIEngineStatus
 import com.offlineai.app.data.repository.KnowledgeStats
-import com.offlineai.app.ui.components.AppTopBar
 
 import kotlinx.coroutines.launch
 
@@ -348,7 +347,7 @@ fun ChatScreen(
                     )
         ) {
 
-            AppTopBar(
+            ChatTopBar(
                 title =
                     "Offline AI",
 

@@ -128,7 +128,7 @@ fun ChatInput(
                         text =
                             when {
                                 isGenerating ->
-                                    "Type while AI is thinking..."
+                                    "Ask anything..."
 
                                 !enabled ->
                                     "Session response limit reached"

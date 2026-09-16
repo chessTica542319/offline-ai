@@ -1,10 +1,9 @@
-package com.offlineai.app.ui.components
+package com.offlineai.app.ui.chat
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -19,24 +18,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun AppTopBar(
+fun ChatTopBar(
     title: String,
     onOpenDrawer: () -> Unit
 ) {
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .height(64.dp)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         IconButton(
             onClick = onOpenDrawer
         ) {
-
             Icon(
                 imageVector = Icons.Default.Menu,
                 contentDescription = "Open navigation menu",
@@ -53,10 +48,8 @@ fun AppTopBar(
 
         IconButton(
             onClick = {
-                // More actions will be added later.
             }
         ) {
-
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More options",
