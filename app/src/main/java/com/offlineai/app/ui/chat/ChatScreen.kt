@@ -364,22 +364,34 @@ fun ChatScreen(
                             vertical = 8.dp
                         )
             ) {
+                /**/
 
-               Column {
+             Column {
 
-                    Text(
-                        text =
-                            "Responses this session: " +
-                                "$responseCount / 50",
+                Text(
+                    text =
+                        "Responses this session: " +
+                            "$responseCount / 50",
 
-                        style =
-                            MaterialTheme
-                                .typography
-                                .bodySmall,
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
 
-                        color =
-                            Color(0xFF68736D)
-                    )
+                    color =
+                        Color(0xFF68736D)
+                )
+
+                Row(
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    horizontalArrangement =
+                        Arrangement.SpaceBetween,
+
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
 
                     TextButton(
                         onClick = {
@@ -402,12 +414,14 @@ fun ChatScreen(
                                     .bodySmall
                         )
                     }
-                }
 
-                AIStatusText(
-                    status =
-                        aiEngineStatus
-                )
+                    AIStatusText(
+                        status =
+                            aiEngineStatus
+                    )
+                }
+            } 
+/**/
             }
 
             Box(
