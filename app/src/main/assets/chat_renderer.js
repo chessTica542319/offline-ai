@@ -543,6 +543,7 @@ function renderResponse(
         }
     );
 
+    prepareChatMathLayout(content);
     renderMath(content);
     fitChatMath(content);
 }

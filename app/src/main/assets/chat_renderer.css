@@ -192,9 +192,10 @@ li code {
 }
 
 .katex-display {
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     padding: 4px 0;
+    white-space: nowrap;
 }
 
 a {
@@ -208,7 +209,14 @@ a {
 .chat-math-display {
     display: block;
     width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     padding: 8px 0;
+    white-space: nowrap;
+}
+
+.chat-math-line {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
 }
