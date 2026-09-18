@@ -70,7 +70,6 @@ function extractMathBody(
     };
 }
 
-
 function splitMathSource(
     source
 ) {
@@ -81,15 +80,98 @@ function splitMathSource(
         );
 
     const body =
-        math.body;
+        math.body.trim();
 
-    const parts = [];
+    if (
+        body.length === 0
+    ) {
+        return [
+            source
+        ];
+    }
+
+    /*
+     * --------------------------------------------------
+     * STEP 1
+     * Respect explicit LaTeX line breaks first.
+     *
+     * Example:
+     *
+     * du = e^x \\
+     * dx = sin x
+     *
+     * becomes two natural math lines.
+     * --------------------------------------------------
+     */
+
+    const explicitLines =
+        body
+            .split(
+                /\\\\/g
+            )
+            .map(
+                function(line) {
+                    return line.trim();
+                }
+            )
+            .filter(
+                function(line) {
+                    return line.length > 0;
+                }
+            );
+
+    if (
+        explicitLines.length > 1
+    ) {
+
+        return explicitLines.map(
+            function(line) {
+
+                return (
+                    math.prefix +
+                    line +
+                    math.suffix
+                );
+            }
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------
+     * STEP 2
+     * Find natural separators.
+     *
+     * We DO NOT split immediately.
+     * We first build semantic chunks.
+     * --------------------------------------------------
+     */
+
+    const chunks = [];
 
     let current = "";
 
     let parentheses = 0;
     let brackets = 0;
     let braces = 0;
+
+    function pushCurrent() {
+
+        const value =
+            current.trim();
+
+        if (
+            value.length > 0
+        ) {
+
+            chunks.push(
+                value
+            );
+        }
+
+        current = "";
+    }
+
 
     for (
         let i = 0;
@@ -100,15 +182,21 @@ function splitMathSource(
         const character =
             body.charAt(i);
 
+
+        /*
+         * Track grouping.
+         */
+
         if (
             character === "("
         ) {
             parentheses++;
         }
 
-        if (
+        else if (
             character === ")"
         ) {
+
             parentheses =
                 Math.max(
                     0,
@@ -116,15 +204,16 @@ function splitMathSource(
                 );
         }
 
-        if (
+        else if (
             character === "["
         ) {
             brackets++;
         }
 
-        if (
+        else if (
             character === "]"
         ) {
+
             brackets =
                 Math.max(
                     0,
@@ -132,15 +221,16 @@ function splitMathSource(
                 );
         }
 
-        if (
+        else if (
             character === "{"
         ) {
             braces++;
         }
 
-        if (
+        else if (
             character === "}"
         ) {
+
             braces =
                 Math.max(
                     0,
@@ -148,45 +238,60 @@ function splitMathSource(
                 );
         }
 
+
         const topLevel =
             parentheses === 0 &&
             brackets === 0 &&
             braces === 0;
 
-        const previous =
-            i > 0
-                ? body.charAt(i - 1)
-                : "";
 
-        const next =
-            i + 1 < body.length
-                ? body.charAt(i + 1)
-                : "";
+        /*
+         * ------------------------------------------------
+         * "="
+         *
+         * Keep "=" with the RIGHT side.
+         *
+         * Example:
+         *
+         * du = e^x
+         *
+         * becomes one chunk:
+         *
+         * du = e^x
+         *
+         * NOT:
+         *
+         * du
+         * = e^x
+         * ------------------------------------------------
+         */
 
         if (
             character === "=" &&
-            topLevel &&
-            previous !== "<" &&
-            previous !== ">" &&
-            previous !== "!" &&
-            previous !== "=" &&
-            next !== "="
+            topLevel
         ) {
 
-            if (
-                current.trim().length > 0
-            ) {
-
-                parts.push(
-                    current.trim()
-                );
-            }
-
             current =
-                "= ";
+                current.trim() +
+                " =";
+
+            /*
+             * Do not push yet.
+             *
+             * Continue collecting the RHS.
+             */
 
             continue;
         }
+
+
+        /*
+         * ------------------------------------------------
+         * Comma
+         *
+         * Commas are natural boundaries.
+         * ------------------------------------------------
+         */
 
         if (
             character === "," &&
@@ -197,34 +302,107 @@ function splitMathSource(
                 current.trim() +
                 ",";
 
-            if (
-                current.trim().length > 0
-            ) {
-
-                parts.push(
-                    current.trim()
-                );
-            }
-
-            current = "";
+            pushCurrent();
 
             continue;
         }
 
-        current += character;
+
+        /*
+         * ------------------------------------------------
+         * Natural-language separators.
+         *
+         * We only split when these words appear at the
+         * top level.
+         * ------------------------------------------------
+         */
+
+        if (
+            topLevel &&
+            (
+                body.substring(
+                    i,
+                    i + 5
+                ).toLowerCase() ===
+                " and "
+                ||
+                body.substring(
+                    i,
+                    i + 4
+                ).toLowerCase() ===
+                " or "
+                ||
+                body.substring(
+                    i,
+                    i + 10
+                ).toLowerCase() ===
+                " therefore "
+            )
+        ) {
+
+            /*
+             * Keep the separator with the next chunk.
+             */
+
+            pushCurrent();
+
+            if (
+                body.substring(
+                    i,
+                    i + 5
+                ).toLowerCase() ===
+                " and "
+            ) {
+
+                current =
+                    "and ";
+
+                i += 4;
+
+                continue;
+            }
+
+            if (
+                body.substring(
+                    i,
+                    i + 4
+                ).toLowerCase() ===
+                " or "
+            ) {
+
+                current =
+                    "or ";
+
+                i += 3;
+
+                continue;
+            }
+
+            current =
+                "therefore ";
+
+            i += 9;
+
+            continue;
+        }
+
+
+        current +=
+            character;
     }
 
-    if (
-        current.trim().length > 0
-    ) {
 
-        parts.push(
-            current.trim()
-        );
-    }
+    pushCurrent();
+
+
+    /*
+     * --------------------------------------------------
+     * If there was no useful split, return original.
+     * --------------------------------------------------
+     */
 
     if (
-        parts.length <= 1
+        chunks.length <= 1
     ) {
 
         return [
@@ -232,7 +410,80 @@ function splitMathSource(
         ];
     }
 
-    return parts.map(
+
+    /*
+     * --------------------------------------------------
+     * STEP 3
+     *
+     * Merge tiny/orphan chunks.
+     *
+     * This prevents:
+     *
+     * du =
+     * e^x
+     *
+     * or:
+     *
+     * dx
+     * and
+     * v = ...
+     * --------------------------------------------------
+     */
+
+    const merged = [];
+
+    chunks.forEach(
+        function(chunk) {
+
+            const value =
+                chunk.trim();
+
+            if (
+                value.length === 0
+            ) {
+                return;
+            }
+
+            /*
+             * If a chunk is only an operator,
+             * attach it to the previous chunk.
+             */
+
+            if (
+                /^[=+\-*/<>≤≥≠]+$/.test(
+                    value
+                )
+            ) {
+
+                if (
+                    merged.length > 0
+                ) {
+
+                    merged[
+                        merged.length - 1
+                    ] +=
+                        " " +
+                        value;
+                }
+
+                return;
+            }
+
+            merged.push(
+                value
+            );
+        }
+    );
+
+
+    /*
+     * --------------------------------------------------
+     * STEP 4
+     * Rebuild KaTeX expressions.
+     * --------------------------------------------------
+     */
+
+    return merged.map(
         function(part) {
 
             return (

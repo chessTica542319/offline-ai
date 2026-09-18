@@ -192,14 +192,14 @@ li code {
 }
 
 .katex-display {
-    overflow-x: hidden;
-    overflow-y: hidden;
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    margin: 0;
     padding: 4px 0;
+    overflow: visible;
     white-space: nowrap;
-}
-
-a {
-    color: #176b3a;
+    text-align: left;
 }
 
 .chat-math-inline {
@@ -207,16 +207,31 @@ a {
 }
 
 .chat-math-display {
+
+    --math-safe-space: 5px;
+
     display: block;
     width: 100%;
-    overflow-x: hidden;
-    overflow-y: hidden;
-    padding: 8px 0;
+    max-width: 100%;
+    margin: 0;
+    padding-left: var(--math-safe-space);
+    padding-right: var(--math-safe-space);
+    overflow: visible;
     white-space: nowrap;
+    text-align: left;
 }
 
 .chat-math-line {
+
+    --math-safe-space: 5px;
+
     display: block;
     width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding-left: var(--math-safe-space);
+    padding-right: var(--math-safe-space);
+    overflow: visible;
     white-space: nowrap;
+    text-align: left;
 }

@@ -45,7 +45,6 @@ function getMathElementWidth(
         .width;
 }
 
-
 function shrinkMathElement(
     element,
     minimumSize
@@ -65,9 +64,12 @@ function shrinkMathElement(
             element
         );
 
-    // Math font size: change 16 and 14 here when testing.
     const maximumSize = 18;
-    const minimumMathSize = 16;
+
+    const minimumMathSize =
+        typeof minimumSize === "number"
+            ? minimumSize
+            : 16;
 
     let currentSize =
         maximumSize;
@@ -84,7 +86,6 @@ function shrinkMathElement(
         actualWidth <=
         availableWidth
     ) {
-
         return true;
     }
 
@@ -108,7 +109,6 @@ function shrinkMathElement(
             actualWidth <=
             availableWidth
         ) {
-
             return true;
         }
     }
@@ -120,7 +120,6 @@ function shrinkMathElement(
         availableWidth
     );
 }
-
 
 function renderMathPart(
     element
@@ -226,7 +225,7 @@ function fitMathLine(
 
     return shrinkMathElement(
         line,
-        14
+        16
     );
 }
 
