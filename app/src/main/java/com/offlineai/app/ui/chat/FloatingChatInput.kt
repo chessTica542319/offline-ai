@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -34,6 +35,10 @@ fun FloatingChatInput(
         mutableIntStateOf(0)
     }
 
+    var showAttachmentOptions by remember {
+        mutableStateOf(false)
+    }
+
     val keyboardOffset = rememberChatKeyboardOffset()
 
     Box(
@@ -53,7 +58,9 @@ fun FloatingChatInput(
             onValueChange = onValueChange,
             onSend = onSend,
             onStop = onStop,
-            onPlus = onPlus,
+            onPlus = {
+                showAttachmentOptions = true
+            },
             onLimitReached = onLimitReached,
             isGenerating = isGenerating,
             enabled = enabled
@@ -77,6 +84,19 @@ fun FloatingChatInput(
                     )
                 }
             }
-        } 
+        }
+
+        if (showAttachmentOptions) {
+            AttachmentOptionsDialog(
+                onDismiss = {
+                    showAttachmentOptions = false
+                },
+                onOptionSelected = {
+                    showAttachmentOptions = false
+                }
+            )
+        }
+
+
     }
 }
